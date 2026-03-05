@@ -45,6 +45,34 @@ export default {
             });
         }
 
+        // --- GET /user : User's voted news ---
+        if (url.pathname === "/user" && request.method === "GET") {
+            const user = await getSessionUser(request, env);
+
+            if (!user) {
+                return new Response(null, {
+                    status: 302,
+                    headers: { Location: "/login" },
+                });
+            }
+
+            const { results } = await env.DB.prepare(`
+                SELECT n.id, n.title, n.url, n.upvotes, n.published_at, n.created_at, s.name as source_name
+                FROM news n
+                JOIN sources s ON n.source_id = s.id
+                JOIN votes v ON v.news_id = n.id
+                WHERE v.user_id = ?
+                ORDER BY v.created_at DESC
+                LIMIT 50
+            `).bind(user.id).all<NewsRow>();
+
+            const news = results ?? [];
+            const html = renderPage(news, user, "voted");
+            return new Response(html, {
+                headers: { "Content-Type": "text/html; charset=utf-8" },
+            });
+        }
+
         // --- Auth routes ---
         if (url.pathname === "/login" && request.method === "GET") {
             return handleLogin(request, env);

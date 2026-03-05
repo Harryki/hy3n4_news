@@ -72,10 +72,10 @@ interface UserInfo {
   email: string | null;
 }
 
-export function renderPage(news: NewsRow[], user: UserInfo | null = null): string {
+export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTitle: string = ""): string {
   const items = news.map((item, i) => renderNewsItem(item, i + 1)).join("\n");
   const authHtml = user
-    ? `<span class="user-name">${escapeHtml(user.username)}</span> | <a href="/logout">logout</a>`
+    ? `<a href="/user" class="user-name">${escapeHtml(user.username)}</a> | <a href="/logout">logout</a>`
     : `<a href="/login">login</a>`;
 
   return `<!DOCTYPE html>
@@ -245,15 +245,17 @@ export function renderPage(news: NewsRow[], user: UserInfo | null = null): strin
     });
   </script>
   <header>
-    <h1>hy3n4 news</h1>
-    <nav><a href="/">top</a></nav>
+    <h1><a href="/" style="color: var(--bg); text-decoration: none;">hy3n4 news</a></h1>
+    <nav>
+      ${pageTitle ? `<span style="color: var(--bg); font-size: 12px; font-weight: bold; margin-left: 8px;">/ ${escapeHtml(pageTitle)}</span>` : ''}
+    </nav>
     <div class="auth-area">${authHtml}</div>
   </header>
   <ol class="news-list">
     ${items}
   </ol>
   <footer>
-    powered by cloudflare workers
+    Guidelines | FAQ | Contact | Legal
   </footer>
 </body>
 </html>`;

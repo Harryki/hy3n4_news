@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS news (
   title TEXT NOT NULL,
   url TEXT NOT NULL UNIQUE,
   upvotes INTEGER NOT NULL DEFAULT 0,
+  published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (source_id) REFERENCES sources(id)
 );

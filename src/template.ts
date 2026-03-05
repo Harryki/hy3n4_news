@@ -56,10 +56,8 @@ function renderNewsItem(item: NewsRow, rank: number): string {
       </div>
       <div class="news-content">
         <a href="${escapeHtml(item.url)}" class="news-title" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
-        <span class="news-domain">(${escapeHtml(domain)})</span>
         <div class="news-meta">
           <span id="score-${item.id}">${item.upvotes}</span> points
-          · ${escapeHtml(item.source_name)}
           · ${ago}
         </div>
       </div>
@@ -72,8 +70,38 @@ interface UserInfo {
   email: string | null;
 }
 
-export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTitle: string = ""): string {
-  const items = news.map((item, i) => renderNewsItem(item, i + 1)).join("\n");
+export function renderPage(
+  news: NewsRow[],
+  user: UserInfo | null = null,
+  pageTitle: string = "",
+  currentLimit: number = 25,
+  currentTime: number = 24
+): string {
+  // Group news by source_name
+  const groupedNews: Record<string, NewsRow[]> = {};
+  for (const item of news) {
+    if (!groupedNews[item.source_name]) {
+      groupedNews[item.source_name] = [];
+    }
+    groupedNews[item.source_name].push(item);
+  }
+
+  // Generate HTML columns
+  const columnsHtml = Object.keys(groupedNews).map(sourceName => {
+    // Slice by currentLimit
+    const sourceItems = groupedNews[sourceName].slice(0, currentLimit);
+    // Re-rank starting from 1 for each column display
+    const itemsHtml = sourceItems.map((item, i) => renderNewsItem(item, i + 1)).join("\n");
+    return `
+      <div class="news-column">
+        <h2 class="column-header">${escapeHtml(sourceName)}</h2>
+        <ol class="news-list">
+          ${itemsHtml}
+        </ol>
+      </div>
+    `;
+  }).join("\n");
+
   const authHtml = user
     ? `<a href="/user" class="user-name">${escapeHtml(user.username)}</a> | <a href="/logout">logout</a>`
     : `<a href="/login">login</a>`;
@@ -85,6 +113,8 @@ export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTi
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>hy3n4 news</title>
   <meta name="description" content="한국 뉴스 큐레이션 — 조선일보, 경향신문, 연합뉴스">
+  <link href="https://hangeul.pstatic.net/hangeul_static/css/maru-buri.css" rel="stylesheet">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css" />
   <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -98,16 +128,17 @@ export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTi
     }
 
     body {
-      font-family: 'Courier New', Courier, monospace;
+      font-family: 'MaruBuri', 'Nanum Myeongjo', serif;
       background: var(--bg);
       color: var(--text);
-      max-width: 900px;
-      margin: 0 auto;
+      max-width: 100%; /* Use full screen width */
+      margin: 0;
       padding: 0;
       line-height: 1.4;
     }
 
     header {
+      font-family: 'Pretendard', sans-serif;
       background: var(--border);
       padding: 8px 12px;
       display: flex;
@@ -155,6 +186,73 @@ export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTi
       color: var(--accent);
     }
 
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 12px 20px 0;
+      border-bottom: 2px solid var(--border);
+      background: rgba(87, 53, 43, 0.05); /* very light tint of border color */
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: bold;
+      color: var(--secondary);
+      margin-bottom: 12px;
+    }
+
+    .filter-label {
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .filter-btn {
+      text-decoration: none;
+      color: var(--secondary);
+      padding: 2px 6px;
+      border: 1px solid var(--secondary);
+      border-radius: 4px;
+      background: var(--bg);
+    }
+
+    .filter-btn:hover {
+      background: var(--secondary);
+      color: var(--bg);
+    }
+
+    .filter-btn.active {
+      background: var(--accent);
+      color: var(--secondary);
+      border-color: var(--accent);
+    }
+
+    .news-columns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .news-column {
+      flex: 1;
+      min-width: 300px; /* Fallback to single column on mobile */
+    }
+
+    .column-header {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--secondary);
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
     .news-list {
       list-style: none;
       padding: 0;
@@ -163,8 +261,8 @@ export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTi
     .news-item {
       display: flex;
       align-items: baseline;
-      padding: 6px 12px;
-      border-bottom: 1px solid var(--border);
+      padding: 6px 0; /* Removed horizontal padding to fit column better */
+      border-bottom: 1px dashed rgba(87, 53, 43, 0.3); /* Softer border for items in column */
       gap: 6px;
     }
 
@@ -199,7 +297,11 @@ export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTi
     }
 
     .news-content {
-      min-width: 0;
+      min-width: 0; /* Required for text-overflow to work in flex child */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      height: 100%;
     }
 
     .news-title {
@@ -207,7 +309,10 @@ export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTi
       text-decoration: none;
       font-size: 13px;
       font-weight: bold;
-      word-break: break-word;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
     }
 
     .news-title:visited {
@@ -251,9 +356,21 @@ export function renderPage(news: NewsRow[], user: UserInfo | null = null, pageTi
     </nav>
     <div class="auth-area">${authHtml}</div>
   </header>
-  <ol class="news-list">
-    ${items}
-  </ol>
+  ${!pageTitle ? `
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">LIMIT:</span>
+      ${[5, 10, 15, 25].map(l => `<a href="/?limit=${l}&time=${currentTime}" class="filter-btn ${currentLimit === l ? 'active' : ''}">${l}</a>`).join('')}
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">TIME:</span>
+      ${[1, 3, 6, 12, 24].map(t => `<a href="/?limit=${currentLimit}&time=${t}" class="filter-btn ${currentTime === t ? 'active' : ''}">${t}h</a>`).join('')}
+    </div>
+  </div>
+  ` : ''}
+  <div class="news-columns">
+    ${columnsHtml}
+  </div>
   <footer>
     Guidelines | FAQ | Contact | Legal
   </footer>

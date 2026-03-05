@@ -17,29 +17,31 @@ export default {
         if (url.pathname === "/" && request.method === "GET") {
             const user = await getSessionUser(request, env);
 
-            // Get today's date in KST (UTC+9)
-            const nowUTC = new Date();
-            const nowKST = new Date(nowUTC.getTime() + 9 * 60 * 60 * 1000);
-            const todayKSTString = nowKST.toISOString().split("T")[0];
+            const limit = parseInt(url.searchParams.get("limit") || "5", 10);
+            const timeHours = parseInt(url.searchParams.get("time") || "24", 10);
+
+            // Fetch based on time threshold
+            const now = new Date();
+            const cutoffTime = new Date(now.getTime() - timeHours * 60 * 60 * 1000);
+            const cutoffISO = cutoffTime.toISOString();
 
             const { results } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.upvotes, n.published_at, n.created_at, s.name as source_name
-        FROM news n
-        JOIN sources s ON n.source_id = s.id
-        WHERE date(n.published_at, '+9 hours') = ?
-        ORDER BY n.created_at DESC
-        LIMIT 100
-      `).bind(todayKSTString).all<NewsRow>();
+                SELECT n.id, n.title, n.url, n.upvotes, n.published_at, n.created_at, s.name as source_name
+                FROM news n
+                JOIN sources s ON n.source_id = s.id
+                WHERE n.published_at >= ?
+                ORDER BY n.created_at DESC
+                LIMIT 500
+            `).bind(cutoffISO).all<NewsRow>();
 
             const news = results ?? [];
 
-            const now = new Date();
+            // Rank all fetched news by hnScore (per source limitation is handled in renderPage)
             const ranked = news
                 .map((item) => ({ ...item, score: hnScore(item.upvotes, item.published_at, now) }))
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 50);
+                .sort((a, b) => b.score - a.score);
 
-            const html = renderPage(ranked, user);
+            const html = renderPage(ranked, user, "", limit, timeHours);
             return new Response(html, {
                 headers: { "Content-Type": "text/html; charset=utf-8" },
             });

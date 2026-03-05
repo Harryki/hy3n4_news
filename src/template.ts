@@ -341,6 +341,44 @@ export function renderPage(
       color: var(--secondary);
       border-top: 2px solid var(--border);
     }
+
+    footer a {
+      color: var(--secondary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .static-content {
+      padding: 30px 20px;
+      max-width: 800px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .static-content h2 {
+      color: var(--secondary);
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent);
+    }
+
+    .static-content h3 {
+      color: var(--text);
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+
+    .static-content p, .static-content ul {
+      margin-bottom: 16px;
+    }
+
+    .static-content li {
+      margin-bottom: 8px;
+      margin-left: 20px;
+    }
   </style>
 </head>
 <body>
@@ -372,7 +410,162 @@ export function renderPage(
     ${columnsHtml}
   </div>
   <footer>
-    Guidelines | FAQ | Contact | Legal
+    <a href="/guidelines">Guidelines</a> | <a href="/legal">Legal</a> | <a href="mailto:hy3n4news@gmail.com">Contact</a>
+  </footer>
+</body>
+</html>`;
+}
+
+export function renderStaticPage(contentHtml: string, user: UserInfo | null = null, pageTitle: string = ""): string {
+  const authHtml = user
+    ? `<a href="/user" class="user-name">${escapeHtml(user.username)}</a> | <a href="/logout">logout</a>`
+    : `<a href="/login">login</a>`;
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hy3n4 news - ${escapeHtml(pageTitle)}</title>
+  <meta name="description" content="한국 뉴스 큐레이션 — 조선일보, 경향신문, 연합뉴스">
+  <link href="https://hangeul.pstatic.net/hangeul_static/css/maru-buri.css" rel="stylesheet">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css" />
+  <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --text: #2b2b2b;
+      --bg: #f9e9da;
+      --secondary: #4c393d;
+      --border: #57352b;
+      --accent: #e5a657;
+    }
+
+    body {
+      font-family: 'MaruBuri', 'Nanum Myeongjo', serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 100%;
+      margin: 0;
+      padding: 0;
+      line-height: 1.4;
+    }
+
+    header {
+      font-family: 'Pretendard', sans-serif;
+      background: var(--border);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 3px solid var(--accent);
+    }
+
+    header h1 {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--bg);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    header nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    header nav a:hover {
+      text-decoration: underline;
+    }
+
+    .auth-area {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--bg);
+    }
+
+    .auth-area a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .auth-area a:hover {
+      text-decoration: underline;
+    }
+
+    .user-name {
+      color: var(--accent);
+    }
+
+    footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 11px;
+      color: var(--secondary);
+      border-top: 2px solid var(--border);
+      margin-top: 40px;
+    }
+
+    footer a {
+      color: var(--secondary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .static-content {
+      padding: 30px 20px;
+      max-width: 800px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .static-content h2 {
+      color: var(--secondary);
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent);
+      font-family: 'Pretendard', sans-serif;
+    }
+
+    .static-content h3 {
+      color: var(--text);
+      margin-top: 24px;
+      margin-bottom: 12px;
+      font-family: 'Pretendard', sans-serif;
+    }
+
+    .static-content p, .static-content ul {
+      margin-bottom: 16px;
+    }
+
+    .static-content li {
+      margin-bottom: 8px;
+      margin-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><a href="/" style="color: var(--bg); text-decoration: none;">hy3n4 news</a></h1>
+    <nav>
+      ${pageTitle ? `<span style="color: var(--bg); font-size: 12px; font-weight: bold; margin-left: 8px;">/ ${escapeHtml(pageTitle)}</span>` : ''}
+    </nav>
+    <div class="auth-area">${authHtml}</div>
+  </header>
+  
+  <main>
+    ${contentHtml}
+  </main>
+
+  <footer>
+    <a href="/guidelines">Guidelines</a> | <a href="/legal">Legal</a> | <a href="mailto:hy3n4news@gmail.com">Contact</a>
   </footer>
 </body>
 </html>`;

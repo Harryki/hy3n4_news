@@ -1,6 +1,6 @@
 import { parseRSS } from "./rss";
 import { hnScore } from "./ranking";
-import { renderPage, NewsRow } from "./template";
+import { renderPage, renderStaticPage, NewsRow } from "./template";
 import { Env, handleLogin, handleCallback, handleLogout, getSessionUser } from "./auth";
 
 export type { Env };
@@ -17,7 +17,7 @@ export default {
         if (url.pathname === "/" && request.method === "GET") {
             const user = await getSessionUser(request, env);
 
-            const limit = parseInt(url.searchParams.get("limit") || "5", 10);
+            const limit = parseInt(url.searchParams.get("limit") || "25", 10);
             const timeHours = parseInt(url.searchParams.get("time") || "24", 10);
 
             // Fetch based on time threshold
@@ -70,6 +70,46 @@ export default {
 
             const news = results ?? [];
             const html = renderPage(news, user, "voted");
+            return new Response(html, {
+                headers: { "Content-Type": "text/html; charset=utf-8" },
+            });
+        }
+
+        // --- GET /guidelines ---
+        if (url.pathname === "/guidelines" && request.method === "GET") {
+            const user = await getSessionUser(request, env);
+            const content = `
+                <div class="static-content">
+                    <h2>Community Guidelines</h2>
+                    <p>Welcome to <strong>hy3n4 news</strong>! As this is an automated curation service in its MVP stage, our guidelines are simple:</p>
+                    <ul>
+                        <li>Be respectful in your voting. Do not attempt to game the system through automated means or bots.</li>
+                        <li>We currently curate from established news sources (조선일보, 경향신문, 연합뉴스) to provide a variety of perspectives.</li>
+                        <li>If you experience technical issues or want to suggest a new source, please use the Contact link in the footer.</li>
+                        <li>Enjoy reading and sharing the news!</li>
+                    </ul>
+                </div>
+            `;
+            const html = renderStaticPage(content, user, "Guidelines");
+            return new Response(html, {
+                headers: { "Content-Type": "text/html; charset=utf-8" },
+            });
+        }
+
+        // --- GET /legal ---
+        if (url.pathname === "/legal" && request.method === "GET") {
+            const user = await getSessionUser(request, env);
+            const content = `
+                <div class="static-content">
+                    <h2>Legal Information</h2>
+                    <h3>Terms of Service</h3>
+                    <p>By using hy3n4 news, you agree that this is a hobbyist news aggregator provided "as is" without any warranties. The content and copyrights belong to their respective original publishers. We are not responsible for the accuracy of the aggregated content.</p>
+                    
+                    <h3>Privacy Policy</h3>
+                    <p>We believe in minimal data collection. We use Google OAuth strictly for secure login purposes. We only store your Google ID, chosen username, and email to maintain your voting session. We do not track your activity across the web, nor do we sell your data to any third parties.</p>
+                </div>
+            `;
+            const html = renderStaticPage(content, user, "Legal");
             return new Response(html, {
                 headers: { "Content-Type": "text/html; charset=utf-8" },
             });

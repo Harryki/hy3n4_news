@@ -19,11 +19,20 @@ CREATE TABLE IF NOT EXISTS news (
   FOREIGN KEY (source_id) REFERENCES sources(id)
 );
 
--- Users: simple user records
+-- Users: Google OAuth based
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL UNIQUE,
+  google_id TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL,
   email TEXT
+);
+
+-- Sessions: token-based session management
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  expires_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 -- Votes: one vote per user per news item

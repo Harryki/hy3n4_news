@@ -66,8 +66,17 @@ function renderNewsItem(item: NewsRow, rank: number): string {
     </li>`;
 }
 
-export function renderPage(news: NewsRow[]): string {
+interface UserInfo {
+  id: number;
+  username: string;
+  email: string | null;
+}
+
+export function renderPage(news: NewsRow[], user: UserInfo | null = null): string {
   const items = news.map((item, i) => renderNewsItem(item, i + 1)).join("\n");
+  const authHtml = user
+    ? `<span class="user-name">${escapeHtml(user.username)}</span> | <a href="/logout">logout</a>`
+    : `<a href="/login">login</a>`;
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -124,6 +133,26 @@ export function renderPage(news: NewsRow[]): string {
 
     header nav a:hover {
       text-decoration: underline;
+    }
+
+    .auth-area {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--bg);
+    }
+
+    .auth-area a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .auth-area a:hover {
+      text-decoration: underline;
+    }
+
+    .user-name {
+      color: var(--accent);
     }
 
     .news-list {
@@ -210,9 +239,15 @@ export function renderPage(news: NewsRow[]): string {
   </style>
 </head>
 <body>
+  <script>
+    document.addEventListener('htmx:responseError', function(e) {
+      if (e.detail.xhr.status === 401) { window.location.href = '/login'; }
+    });
+  </script>
   <header>
     <h1>hy3n4 news</h1>
     <nav><a href="/">top</a></nav>
+    <div class="auth-area">${authHtml}</div>
   </header>
   <ol class="news-list">
     ${items}

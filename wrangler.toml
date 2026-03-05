@@ -9,3 +9,6 @@ database_id = "local"
 
 [triggers]
 crons = ["0 */6 * * *"]
+
+[vars]
+GOOGLE_CLIENT_ID = "5439287092-mfrbcjgop304q6d8693avajaagc8gk87.apps.googleusercontent.com"

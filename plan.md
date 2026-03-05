@@ -51,6 +51,12 @@
 2. **HTMX 투표 버튼 UI 추가**
    - 리스트의 각 아이템에 투표 버튼 추가.
    - 속성: `hx-post="/vote/:news_id"`, `hx-target="#score-:news_id"`, `hx-swap="innerHTML"`.
+3. **DESIGN color theme**
+   - text: #2b2b2b
+   - background: #f9e9da
+   - secondary text: #4c393d
+   - borders & dividers: #57352b
+   - Accent & Interactive: #e5a657
 
 **✅ Checkpoint 3:**
 - 브라우저에서 `localhost:8787` 접속 시 투박한 디자인의 뉴스 리스트가 출력됨.

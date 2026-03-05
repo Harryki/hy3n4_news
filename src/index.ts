@@ -1,4 +1,6 @@
 import { parseRSS } from "./rss";
+import { hnScore } from "./ranking";
+import { renderPage, NewsRow } from "./template";
 
 export interface Env {
     DB: D1Database;
@@ -13,8 +15,27 @@ export default {
         const url = new URL(request.url);
 
         if (url.pathname === "/") {
-            return new Response("hy3n4 news — coming soon", {
-                headers: { "Content-Type": "text/plain; charset=utf-8" },
+            // Fetch recent news with source names
+            const { results } = await env.DB.prepare(`
+                SELECT n.id, n.title, n.url, n.upvotes, n.published_at, n.created_at, s.name as source_name
+                FROM news n
+                JOIN sources s ON n.source_id = s.id
+                ORDER BY n.created_at DESC
+                LIMIT 200
+            `).all<NewsRow>();
+
+            const news = results ?? [];
+
+            // Apply HN ranking algorithm and take top 50
+            const now = new Date();
+            const ranked = news
+                .map((item) => ({ ...item, score: hnScore(item.upvotes, item.published_at, now) }))
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 50);
+
+            const html = renderPage(ranked);
+            return new Response(html, {
+                headers: { "Content-Type": "text/html; charset=utf-8" },
             });
         }
 

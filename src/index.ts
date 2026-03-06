@@ -176,6 +176,20 @@ export default {
             });
         }
 
+        // Manual cron trigger (protected by secret key)
+        if (url.pathname === "/___force-rss-update" && request.method === "GET") {
+            const key = url.searchParams.get("key");
+            if (!key || key !== (env as any).CRON_SECRET) {
+                return new Response("Unauthorized", { status: 401 });
+            }
+            try {
+                await this.scheduled!(null as any, env, ctx);
+                return new Response("Cron triggered successfully.", { status: 200 });
+            } catch (error: any) {
+                return new Response("Failed: " + error.message, { status: 500 });
+            }
+        }
+
         return new Response("Not Found", { status: 404 });
     },
 
@@ -184,41 +198,53 @@ export default {
         env: Env,
         ctx: ExecutionContext
     ): Promise<void> {
-        console.log("RSS fetch started");
+        const startTime = Date.now();
+        console.log(`[CRON] ========== RSS fetch started at ${new Date().toISOString()} ==========`);
 
         const { results: sources } = await env.DB.prepare(
             "SELECT id, url, name FROM sources WHERE is_active = 1"
         ).all<{ id: number; url: string; name: string }>();
 
         if (!sources || sources.length === 0) {
-            console.log("No active sources found");
+            console.warn("[CRON] No active sources found in DB. Aborting.");
             return;
         }
 
+        console.log(`[CRON] Found ${sources.length} active sources: ${sources.map(s => s.name).join(", ")}`);
+
         const feedResults = await Promise.allSettled(
             sources.map(async (source) => {
+                console.log(`[FETCH] ${source.name}: Fetching ${source.url}`);
                 const res = await fetch(source.url, {
                     headers: { "User-Agent": "hy3n4-news-bot/1.0" },
                 });
+                console.log(`[FETCH] ${source.name}: HTTP ${res.status} ${res.statusText}`);
                 if (!res.ok) {
-                    throw new Error(`HTTP ${res.status} for ${source.name}`);
+                    throw new Error(`HTTP ${res.status} ${res.statusText} for ${source.name} (${source.url})`);
                 }
                 const xml = await res.text();
+                console.log(`[FETCH] ${source.name}: Received ${xml.length} bytes of XML`);
                 const items = parseRSS(xml);
+                console.log(`[PARSE] ${source.name}: ${items.length} items parsed`);
                 return { source, items };
             })
         );
 
         let totalInserted = 0;
+        let totalSkipped = 0;
+        let totalErrors = 0;
 
         for (const result of feedResults) {
             if (result.status === "rejected") {
-                console.error("Feed fetch failed:", result.reason);
+                console.error(`[ERROR] Feed fetch failed: ${result.reason}`);
+                totalErrors++;
                 continue;
             }
 
             const { source, items } = result.value;
-            console.log(`${source.name}: ${items.length} items parsed`);
+            let inserted = 0;
+            let skipped = 0;
+            let errors = 0;
 
             for (const item of items) {
                 try {
@@ -227,14 +253,25 @@ export default {
                     ).bind(source.id, item.title, item.link, item.publishedAt).run();
 
                     if (insertResult.meta.changes > 0) {
-                        totalInserted++;
+                        inserted++;
+                    } else {
+                        skipped++;
                     }
                 } catch (err) {
-                    console.error(`Insert failed for "${item.title}":`, err);
+                    errors++;
+                    console.error(`[DB] Insert failed for "${item.title}" (${source.name}):`, err);
                 }
             }
+
+            totalInserted += inserted;
+            totalSkipped += skipped;
+            totalErrors += errors;
+
+            console.log(`[RESULT] ${source.name}: +${inserted} new | ${skipped} duplicates | ${errors} errors (of ${items.length} total)`);
         }
 
-        console.log(`RSS fetch complete. ${totalInserted} new articles inserted.`);
+        const elapsed = Date.now() - startTime;
+        console.log(`[CRON] ========== RSS fetch complete in ${elapsed}ms ==========`);
+        console.log(`[CRON] Summary: ${totalInserted} inserted | ${totalSkipped} skipped | ${totalErrors} errors`);
     },
 };

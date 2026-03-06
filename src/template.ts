@@ -3,6 +3,7 @@ export interface NewsRow {
   title: string;
   url: string;
   upvotes: number;
+  view_count: number;
   published_at: string | null;
   created_at: string;
   source_name: string;
@@ -44,7 +45,6 @@ function renderNewsItem(item: NewsRow, rank: number): string {
 
   return `
     <li class="news-item">
-      <div class="news-rank">${rank}.</div>
       <div class="news-vote">
         <button
           class="vote-btn"
@@ -55,10 +55,11 @@ function renderNewsItem(item: NewsRow, rank: number): string {
         >▲</button>
       </div>
       <div class="news-content">
-        <a href="${escapeHtml(item.url)}" class="news-title" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
+        <a href="/go/${item.id}" class="news-title" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
         <div class="news-meta">
-          <span id="score-${item.id}">${item.upvotes}</span> points
-          · ${ago}
+          <span class="meta-pill meta-points"><span id="score-${item.id}">${item.upvotes}</span> p</span>
+          <span class="meta-pill meta-views">𓁹 ${item.view_count}</span>
+          <span class="meta-pill meta-time">${ago}</span>
         </div>
       </div>
     </li>`;
@@ -213,10 +214,13 @@ export function renderPage(
     .filter-btn {
       text-decoration: none;
       color: var(--secondary);
-      padding: 2px 6px;
+      padding: 6px 12px;
       border: 1px solid var(--secondary);
       border-radius: 4px;
       background: var(--bg);
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
     }
 
     .filter-btn:hover {
@@ -237,9 +241,13 @@ export function renderPage(
       padding: 20px;
     }
 
+    @media (max-width: 640px) {
+      .news-columns { padding: 8px 0; gap: 12px; }
+    }
+
     .news-column {
-      flex: 1;
-      min-width: 300px; /* Fallback to single column on mobile */
+      flex: 1 1 calc(33.333% - 14px);
+      min-width: 300px;
     }
 
     .column-header {
@@ -287,8 +295,13 @@ export function renderPage(
       border: none;
       color: var(--accent);
       cursor: pointer;
-      font-size: 12px;
-      padding: 0 2px;
+      font-size: 14px;
+      padding: 8px;
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       line-height: 1;
     }
 
@@ -329,9 +342,33 @@ export function renderPage(
     }
 
     .news-meta {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+
+    .meta-pill {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-weight: bold;
+      letter-spacing: 0.3px;
+    }
+
+    .meta-points {
+      color: var(--accent);
+      background: rgba(229, 166, 87, 0.12);
+    }
+
+    .meta-views {
       color: var(--secondary);
-      font-size: 11px;
-      margin-top: 1px;
+      background: rgba(76, 57, 61, 0.2);
+    }
+
+    .meta-time {
+      color: var(--secondary);
+      background: none;
     }
 
     footer {

@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS news (
   title TEXT NOT NULL,
   url TEXT NOT NULL UNIQUE,
   upvotes INTEGER NOT NULL DEFAULT 0,
+  view_count INTEGER NOT NULL DEFAULT 0,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (source_id) REFERENCES sources(id)
@@ -46,6 +47,16 @@ CREATE TABLE IF NOT EXISTS votes (
   FOREIGN KEY (news_id) REFERENCES news(id)
 );
 
--- Index for ranking queries
+-- Click tracking
+CREATE TABLE IF NOT EXISTS clicks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  news_id INTEGER NOT NULL,
+  clicked_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (news_id) REFERENCES news(id)
+);
+
+-- Indexes
 CREATE INDEX IF NOT EXISTS idx_news_upvotes_created ON news(upvotes DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_news_source ON news(source_id);
+CREATE INDEX IF NOT EXISTS idx_clicks_news ON clicks(news_id);

@@ -26,7 +26,7 @@ export default {
             const cutoffISO = cutoffTime.toISOString();
 
             const { results } = await env.DB.prepare(`
-                SELECT n.id, n.title, n.url, n.upvotes, n.published_at, n.created_at, s.name as source_name
+                SELECT n.id, n.title, n.url, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name
                 FROM news n
                 JOIN sources s ON n.source_id = s.id
                 WHERE n.published_at >= ?
@@ -112,6 +112,35 @@ export default {
             const html = renderStaticPage(content, user, "Legal");
             return new Response(html, {
                 headers: { "Content-Type": "text/html; charset=utf-8" },
+            });
+        }
+
+        // --- GET /go/:news_id : Click tracking + redirect ---
+        const goMatch = url.pathname.match(/^\/go\/(\d+)$/);
+        if (goMatch && request.method === "GET") {
+            const newsId = parseInt(goMatch[1], 10);
+            const user = await getSessionUser(request, env);
+
+            // Record click & increment view count
+            await env.DB.prepare(
+                "INSERT INTO clicks (user_id, news_id) VALUES (?, ?)"
+            ).bind(user?.id ?? null, newsId).run();
+            await env.DB.prepare(
+                "UPDATE news SET view_count = view_count + 1 WHERE id = ?"
+            ).bind(newsId).run();
+
+            // Get original URL and redirect
+            const row = await env.DB.prepare(
+                "SELECT url FROM news WHERE id = ?"
+            ).bind(newsId).first<{ url: string }>();
+
+            if (!row) {
+                return new Response("Not Found", { status: 404 });
+            }
+
+            return new Response(null, {
+                status: 302,
+                headers: { Location: row.url },
             });
         }
 

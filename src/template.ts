@@ -112,8 +112,41 @@ export function renderPage(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>hy3n4 news</title>
-  <meta name="description" content="한국 뉴스 큐레이션 — 조선일보, 경향신문, 연합뉴스">
+  <title>하이에나뉴스 (hy3n4 news) — 한국 뉴스 큐레이션</title>
+  <meta name="description" content="하이에나뉴스 — 조선일보, 경향신문, 연합뉴스, Google News에서 엄선한 실시간 한국 뉴스. 커뮤니티 투표로 중요한 기사를 함께 발견하세요.">
+  <meta name="keywords" content="하이에나뉴스, hy3n4 news, 한국 뉴스, 뉴스 큐레이션, 실시간 뉴스, 조선일보, 경향신문, 연합뉴스">
+  <link rel="canonical" href="https://hy3n4.news/">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#57352b">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="하이에나뉴스 (hy3n4 news) — 한국 뉴스 큐레이션">
+  <meta property="og:description" content="조선일보, 경향신문, 연합뉴스, Google News에서 엄선한 실시간 한국 뉴스">
+  <meta property="og:url" content="https://hy3n4.news/">
+  <meta property="og:site_name" content="하이에나뉴스">
+  <meta property="og:locale" content="ko_KR">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="하이에나뉴스 (hy3n4 news)">
+  <meta name="twitter:description" content="조선일보, 경향신문, 연합뉴스, Google News에서 엄선한 실시간 한국 뉴스">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "하이에나뉴스",
+    "alternateName": "hy3n4 news",
+    "url": "https://hy3n4.news/",
+    "description": "한국 뉴스 큐레이션 서비스",
+    "inLanguage": "ko"
+  }
+  </script>
+  <meta name="naver-site-verification" content="26cf5e8fb145f46c218dd3244eacdb2aae4295b8" />
+
   <link href="https://hangeul.pstatic.net/hangeul_static/css/maru-buri.css" rel="stylesheet">
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css" />
   <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
@@ -464,7 +497,14 @@ export function renderStaticPage(contentHtml: string, user: UserInfo | null = nu
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>hy3n4 news - ${escapeHtml(pageTitle)}</title>
-  <meta name="description" content="한국 뉴스 큐레이션 — 조선일보, 경향신문, 연합뉴스">
+  <meta name="description" content="hy3n4 news — ${escapeHtml(pageTitle)}">
+  <link rel="canonical" href="https://hy3n4.news/${pageTitle.toLowerCase()}">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#57352b">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>">
+  <meta property="og:title" content="hy3n4 news - ${escapeHtml(pageTitle)}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="hy3n4 news">
   <link href="https://hangeul.pstatic.net/hangeul_static/css/maru-buri.css" rel="stylesheet">
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css" />
   <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>

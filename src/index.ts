@@ -219,6 +219,27 @@ export default {
             }
         }
 
+        // --- SEO: robots.txt ---
+        if (url.pathname === "/robots.txt") {
+            return new Response(
+                `User-agent: *\nAllow: /\nDisallow: /go/\nDisallow: /auth/\nSitemap: https://hy3n4.news/sitemap.xml`,
+                { headers: { "Content-Type": "text/plain" } }
+            );
+        }
+
+        // --- SEO: sitemap.xml ---
+        if (url.pathname === "/sitemap.xml") {
+            const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://hy3n4.news/</loc><changefreq>hourly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://hy3n4.news/guidelines</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://hy3n4.news/legal</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
+</urlset>`;
+            return new Response(xml, {
+                headers: { "Content-Type": "application/xml" },
+            });
+        }
+
         return new Response("Not Found", { status: 404 });
     },
 

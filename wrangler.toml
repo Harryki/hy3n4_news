@@ -5,7 +5,12 @@ compatibility_date = "2024-12-30"
 [[d1_databases]]
 binding = "DB"
 database_name = "news-db"
-database_id = "local"
+database_id = "15bbb429-a4bf-4c66-81fb-73ad4ea7e3ff"
+
+[env.production]
+routes = [
+  { pattern = "hy3n4.news", custom_domain = true }
+]
 
 [triggers]
 crons = ["0 */6 * * *"]

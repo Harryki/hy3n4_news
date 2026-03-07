@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS news (
   source_id INTEGER NOT NULL,
   title TEXT NOT NULL,
   url TEXT NOT NULL UNIQUE,
+  description TEXT,
   upvotes INTEGER NOT NULL DEFAULT 0,
   view_count INTEGER NOT NULL DEFAULT 0,
   published_at TEXT,

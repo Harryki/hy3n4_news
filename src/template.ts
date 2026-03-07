@@ -2,6 +2,7 @@ export interface NewsRow {
   id: number;
   title: string;
   url: string;
+  description: string | null;
   upvotes: number;
   view_count: number;
   published_at: string | null;
@@ -404,10 +405,11 @@ interface LayoutOptions {
   pageTitle?: string;
   user?: UserInfo | null;
   content: string;
+  jsonLd?: string;
 }
 
 function baseLayout(options: LayoutOptions): string {
-  const { headTitle = "하이에나뉴스 (hy3n4 news)", pageTitle = "", user = null, content } = options;
+  const { headTitle = "하이에나뉴스 (hy3n4 news)", pageTitle = "", user = null, content, jsonLd = "" } = options;
 
   const siteTitle = headTitle === "하이에나뉴스 (hy3n4 news)" ? headTitle : `hy3n4 news - ${escapeHtml(pageTitle)}`;
   const siteDescription = pageTitle
@@ -416,6 +418,19 @@ function baseLayout(options: LayoutOptions): string {
   const canonicalUrl = pageTitle
     ? `https://hy3n4.news/${pageTitle.toLowerCase()}`
     : "https://hy3n4.news/";
+
+  const defaultJsonLd = `
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "하이에나뉴스",
+    "alternateName": "hy3n4 news",
+    "url": "https://hy3n4.news/",
+    "description": "한국 뉴스 큐레이션 서비스",
+    "inLanguage": "ko"
+  }
+  </script>`;
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -444,17 +459,8 @@ function baseLayout(options: LayoutOptions): string {
   <meta name="twitter:description" content="${siteDescription}">
 
   <!-- Structured Data -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "하이에나뉴스",
-    "alternateName": "hy3n4 news",
-    "url": "https://hy3n4.news/",
-    "description": "한국 뉴스 큐레이션 서비스",
-    "inLanguage": "ko"
-  }
-  </script>
+  ${defaultJsonLd}
+  ${jsonLd}
   <meta name="naver-site-verification" content="26cf5e8fb145f46c218dd3244eacdb2aae4295b8" />
 
   <link href="https://hangeul.pstatic.net/hangeul_static/css/maru-buri.css" rel="stylesheet">
@@ -495,10 +501,26 @@ export function renderPage(
     groupedNews[item.source_name].push(item);
   }
 
+  // Collect items for Schema.org JSON-LD
+  const schemaItems: any[] = [];
+  let position = 1;
+
   // Generate HTML columns
   const columnsHtml = Object.keys(groupedNews).map(sourceName => {
     // Slice by currentLimit
     const sourceItems = groupedNews[sourceName].slice(0, currentLimit);
+
+    // Add to schema items
+    for (const item of sourceItems) {
+      schemaItems.push({
+        "@type": "ListItem",
+        "position": position++,
+        "url": `https://hy3n4.news/go/${item.id}`,
+        "name": item.title,
+        "description": item.description || `Article from ${sourceName}`
+      });
+    }
+
     // Re-rank starting from 1 for each column display
     const itemsHtml = sourceItems.map((item, i) => renderNewsItem(item, i + 1)).join("\n");
     return `
@@ -531,7 +553,18 @@ export function renderPage(
     </div>
   `;
 
-  return baseLayout({ pageTitle, user, content });
+  // Build the ItemList JSON-LD string
+  let jsonLd = "";
+  if (schemaItems.length > 0) {
+    const listSchema = {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "itemListElement": schemaItems
+    };
+    jsonLd = `\n  <script type="application/ld+json">\n  ${JSON.stringify(listSchema, null, 2)}\n  </script>`;
+  }
+
+  return baseLayout({ pageTitle, user, content, jsonLd });
 }
 
 export function renderStaticPage(contentHtml: string, user: UserInfo | null = null, pageTitle: string = ""): string {

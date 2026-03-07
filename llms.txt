@@ -1,0 +1,16 @@
+# hy3n4 news (하이에나뉴스)
+
+## Overview
+- **Name**: hy3n4 news (하이에나뉴스)
+- **Description**: An automated Korean news curation service designed to aggregate real-time articles from established publishers (such as Chosun Ilbo, Kyunghyang Shinmun, Yonhap News, and Google News).
+- **Core Action**: Community-driven upvoting to discover and surface the most important stories together.
+
+## Characteristics & Principles
+1. **Automated Curation**: The platform fetches news automatically via RSS feeds every hour. It does not manually manipulate or author the content.
+2. **Community Voting Over Algorithms**: Ranking is derived transparently via the Hacker News scoring algorithm rather than opaque engagement algorithms.
+3. **Perspectives Variety**: By sourcing from major outlets across different political and social leanings, the platform aims to provide a variety of perspectives.
+4. **Minimal Tracking Strategy**: Data collection is kept strictly minimal. Only Google IDs, chosen usernames, and emails are stored for session and voting maintenance using Google OAuth. No third-party tracking or data-selling practices are employed.
+
+## Useful Links
+- **Guidelines**: `/guidelines`
+- **Legal Information**: `/legal`

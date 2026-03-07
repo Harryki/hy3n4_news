@@ -74,7 +74,7 @@ router.get("/", async (request, env, ctx) => {
     const cutoffISO = cutoffTime.toISOString();
 
     const { results } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name
+        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name
         FROM news n
         JOIN sources s ON n.source_id = s.id
         WHERE n.published_at >= ?
@@ -116,7 +116,7 @@ router.get("/user", async (request, env, ctx) => {
     }
 
     const { results } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.upvotes, n.published_at, n.created_at, s.name as source_name
+        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.published_at, n.created_at, s.name as source_name
         FROM news n
         JOIN sources s ON n.source_id = s.id
         JOIN votes v ON v.news_id = n.id
@@ -319,8 +319,7 @@ async function performRSSFetch(env: Env): Promise<void> {
             }
             const xml = await res.text();
             console.log(`[FETCH] ${source.name}: Received ${xml.length} bytes of XML`);
-            const items = parseRSS(xml);
-            console.log(`[PARSE] ${source.name}: ${items.length} items parsed`);
+            const items = parseRSS(xml, source.name);
             return { source, items };
         })
     );
@@ -344,8 +343,8 @@ async function performRSSFetch(env: Env): Promise<void> {
         for (const item of items) {
             try {
                 const insertResult = await env.DB.prepare(
-                    "INSERT OR IGNORE INTO news (source_id, title, url, published_at) VALUES (?, ?, ?, ?)"
-                ).bind(source.id, item.title, item.link, item.publishedAt).run();
+                    "INSERT OR IGNORE INTO news (source_id, title, url, description, published_at) VALUES (?, ?, ?, ?, ?)"
+                ).bind(source.id, item.title, item.link, item.description, item.publishedAt).run();
 
                 if (insertResult.meta.changes > 0) {
                     inserted++;
@@ -364,6 +363,7 @@ async function performRSSFetch(env: Env): Promise<void> {
 
         console.log(`[RESULT] ${source.name}: +${inserted} new | ${skipped} duplicates | ${errors} errors (of ${items.length} total)`);
     }
+
 
     const elapsed = Date.now() - startTime;
     console.log(`[CRON] ========== RSS fetch complete in ${elapsed}ms ==========`);

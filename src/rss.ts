@@ -3,6 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 export interface RSSItem {
     title: string;
     link: string;
+    description: string;
     publishedAt: string | null;
 }
 
@@ -40,7 +41,18 @@ function decodeHTMLEntities(text: string): string {
     return text.replace(/&(amp|lt|gt|quot|#39|apos);/g, match => entities[match] || match);
 }
 
-export function parseRSS(xml: string): RSSItem[] {
+function stripHtmlTags(html: string): string {
+    if (!html) return "";
+    // Remove HTML tags
+    let text = html.replace(/<[^>]*>?/gm, '');
+    // Decode HTML entities that might remain
+    text = decodeHTMLEntities(text);
+    // Replace multiple spaces/newlines with a single space
+    text = text.replace(/\s+/g, ' ').trim();
+    return text;
+}
+
+export function parseRSS(xml: string, sourceName: string): RSSItem[] {
     const parsed = parser.parse(xml);
 
     const channel = parsed?.rss?.channel;
@@ -52,6 +64,10 @@ export function parseRSS(xml: string): RSSItem[] {
         .map((item: any) => {
             const title = item.title;
             const link = item.link;
+
+            // Skip Google News description as it's a list of links
+            const rawDescription = sourceName === "Google News" ? "" : (item.description || "");
+            const description = stripHtmlTags(String(rawDescription));
 
             // dc:date becomes "date" after removeNSPrefix (경향신문)
             // pubDate is used by 조선일보 and 연합뉴스
@@ -66,6 +82,7 @@ export function parseRSS(xml: string): RSSItem[] {
             return {
                 title: decodeHTMLEntities(String(title).trim()),
                 link: String(cleanLink).trim(),
+                description,
                 publishedAt,
             };
         })

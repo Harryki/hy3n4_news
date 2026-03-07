@@ -28,6 +28,18 @@ function normalizeDate(raw: string | undefined | null): string | null {
     }
 }
 
+function decodeHTMLEntities(text: string): string {
+    const entities: Record<string, string> = {
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&#39;': "'",
+        '&apos;': "'"
+    };
+    return text.replace(/&(amp|lt|gt|quot|#39|apos);/g, match => entities[match] || match);
+}
+
 export function parseRSS(xml: string): RSSItem[] {
     const parsed = parser.parse(xml);
 
@@ -52,7 +64,7 @@ export function parseRSS(xml: string): RSSItem[] {
             const cleanLink = typeof link === "string" ? link.split("?")[0] : link;
 
             return {
-                title: String(title).trim(),
+                title: decodeHTMLEntities(String(title).trim()),
                 link: String(cleanLink).trim(),
                 publishedAt,
             };

@@ -5,6 +5,14 @@ compatibility_date = "2024-12-30"
 [observability]
 enabled = true
 
+[ai]
+binding = "AI"
+remote = true
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "news-topics-index"
+remote = true
 
 [triggers]
 crons = ["0 * * * *"]
@@ -12,7 +20,7 @@ crons = ["0 * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "news-db"
-database_id = "local"
+database_id = "15bbb429-a4bf-4c66-81fb-73ad4ea7e3ff"
 
 [vars]
 GOOGLE_CLIENT_ID = "5439287092-mfrbcjgop304q6d8693avajaagc8gk87.apps.googleusercontent.com"
@@ -33,3 +41,10 @@ GOOGLE_CLIENT_ID = "5439287092-mfrbcjgop304q6d8693avajaagc8gk87.apps.googleuserc
 binding = "DB"
 database_name = "news-db"
 database_id = "15bbb429-a4bf-4c66-81fb-73ad4ea7e3ff"
+
+[env.production.ai]
+binding = "AI"
+
+[[env.production.vectorize]]
+binding = "VECTORIZE"
+index_name = "news-topics-index"

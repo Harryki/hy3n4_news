@@ -16,6 +16,12 @@ export interface UserInfo {
   email: string | null;
 }
 
+export interface TopicRow {
+  id: number;
+  title: string;
+  article_count: number;
+}
+
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return "";
   const now = Date.now();
@@ -194,11 +200,59 @@ function getStyles(): string {
       display: flex;
       flex-wrap: wrap;
       gap: 20px;
-      padding: 20px;
+      padding: 0 20px 20px;
     }
 
     @media (max-width: 640px) {
-      .news-columns { padding: 8px 0; gap: 12px; }
+      .news-columns { padding: 0 0 8px; gap: 12px; }
+    }
+
+    .hot-topics {
+      padding: 20px 20px 10px;
+      background: var(--bg);
+    }
+    
+    .hot-topics-header {
+      font-size: 15px;
+      font-weight: bold;
+      color: #d94126;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .topic-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .topic-pill {
+      text-decoration: none;
+      background: rgba(229, 166, 87, 0.15);
+      color: var(--secondary);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: bold;
+      border: 1px solid rgba(229, 166, 87, 0.4);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .topic-pill:hover {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+
+    .topic-pill-count {
+      opacity: 0.7;
+      font-size: 11px;
+      margin-left: 6px;
+      font-weight: normal;
     }
 
     .news-column {
@@ -490,7 +544,8 @@ export function renderPage(
   user: UserInfo | null = null,
   pageTitle: string = "",
   currentLimit: number = 25,
-  currentTime: number = 24
+  currentTime: number = 24,
+  hotTopics: TopicRow[] = []
 ): string {
   // Group news by source_name
   const groupedNews: Record<string, NewsRow[]> = {};
@@ -546,7 +601,24 @@ export function renderPage(
   </div>
   ` : '';
 
+  let hotTopicsHtml = "";
+  if (!pageTitle && hotTopics.length > 0) {
+    const pills = hotTopics.map(t =>
+      `<a href="/topic/${t.id}" class="topic-pill">
+        ${escapeHtml(t.title)} <span class="topic-pill-count">${t.article_count}건</span>
+      </a>`
+    ).join("");
+
+    hotTopicsHtml = `
+      <div class="hot-topics">
+        <div class="hot-topics-header">주요 뉴스 토픽</div>
+        <div class="topic-pills">${pills}</div>
+      </div>
+    `;
+  }
+
   const content = `
+    ${hotTopicsHtml}
     ${filterHtml}
     <div class="news-columns">
       ${columnsHtml}
@@ -575,4 +647,39 @@ export function renderStaticPage(contentHtml: string, user: UserInfo | null = nu
   `;
 
   return baseLayout({ pageTitle, user, content });
+}
+
+export function renderTopicPage(
+  news: NewsRow[],
+  topicTitle: string,
+  user: UserInfo | null = null
+): string {
+  const itemsHtml = news.map(item => `
+    <li class="news-item" style="border-bottom: 1px dashed rgba(87,53,43,0.2); padding: 16px 0;">
+      <div class="news-vote">
+        <button class="vote-btn" hx-post="/vote/${item.id}" hx-target="#score-${item.id}" hx-swap="innerHTML">▲</button>
+      </div>
+      <div class="news-content">
+        <a href="/go/${item.id}" class="news-title" style="font-size: 15px; margin-bottom: 4px;" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
+        <div class="news-meta">
+          <span class="meta-pill meta-points"><span id="score-${item.id}">${item.upvotes}</span> p</span>
+          <span class="meta-pill meta-views">𓁹 ${item.view_count}</span>
+          <span class="meta-pill" style="background:rgba(87,53,43,0.1); color:var(--secondary);">${escapeHtml(item.source_name)}</span>
+          <span class="meta-pill meta-time">${new Date(item.published_at || item.created_at).toLocaleString('ko-KR')}</span>
+        </div>
+        ${item.description ? `<p style="font-size:12px; color:var(--secondary); margin-top:8px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.description)}</p>` : ''}
+      </div>
+    </li>
+  `).join("\n");
+
+  const content = `
+    <div style="padding: 24px 20px; max-width: 800px; margin: 0 auto;">
+      <h2 style="font-size: 22px; margin-bottom: 24px; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px;">🔥 ${escapeHtml(topicTitle)}</h2>
+      <ul class="news-list" style="list-style: none; padding: 0;">
+        ${itemsHtml}
+      </ul>
+    </div>
+  `;
+
+  return baseLayout({ pageTitle: topicTitle, user, content });
 }

@@ -1,6 +1,6 @@
 import { parseRSS } from "./rss";
 import { hnScore } from "./ranking";
-import { renderPage, renderStaticPage, NewsRow } from "./template";
+import { renderPage, renderStaticPage, renderTopicPage, NewsRow, TopicRow } from "./template";
 import { Env, handleLogin, handleCallback, handleLogout, getSessionUser } from "./auth";
 
 export type { Env };
@@ -142,12 +142,25 @@ router.get("/", async (request, env, ctx) => {
 
     const news = results ?? [];
 
+    // Fetch Top Topics
+    const { results: topics } = await env.DB.prepare(`
+        SELECT t.id, t.title, count(nt.news_id) as article_count
+        FROM topics t
+        JOIN news_topics nt ON t.id = nt.topic_id
+        WHERE t.updated_at >= datetime('now', '-48 hours')
+        GROUP BY t.id
+        HAVING article_count > 1
+        ORDER BY article_count DESC, t.updated_at DESC
+        LIMIT 10
+    `).all<TopicRow>();
+    const hotTopics = topics ?? [];
+
     // Rank all fetched news by hnScore (per source limitation is handled in renderPage)
     const ranked = news
         .map((item) => ({ ...item, score: hnScore(item.upvotes, item.view_count || 0, item.published_at, now) }))
         .sort((a, b) => b.score - a.score);
 
-    const html = renderPage(ranked, user, "", limit, timeHours);
+    const html = renderPage(ranked, user, "", limit, timeHours, hotTopics);
     const response = new Response(html, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
     });
@@ -160,6 +173,60 @@ router.get("/", async (request, env, ctx) => {
     }
 
     return response;
+});
+
+// --- GET /debug/vector : Dev Debugging Route ---
+router.get(/^\/debug\/vector/, async (request, env, ctx) => {
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q");
+
+    if (!q) return new Response("Provide ?q=TEXT to query vectorize", { status: 400 });
+
+    const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: [q] });
+    const vector = embedRes.data[0];
+
+    const searchRes = await env.VECTORIZE.query(vector, { topK: 10 });
+
+    // Fetch titles for the matched topics
+    const results = [];
+    for (const match of searchRes.matches) {
+        const topic = await env.DB.prepare("SELECT title FROM topics WHERE id = ?").bind(parseInt(match.id, 10)).first<{ title: string }>();
+        results.push({
+            score: match.score,
+            topicId: match.id,
+            title: topic?.title || "Unknown"
+        });
+    }
+
+    return new Response(JSON.stringify({ query: q, results }, null, 2), {
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+});
+
+// --- GET /topic/:id : Topic Details ---
+router.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
+    const topicId = parseInt(match![1], 10);
+    const user = await getSessionUser(request, env);
+
+    const topicRow = await env.DB.prepare("SELECT title FROM topics WHERE id = ?").bind(topicId).first<{ title: string }>();
+    if (!topicRow) return getNotFoundResponse();
+
+    const { results } = await env.DB.prepare(`
+        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name
+        FROM news n
+        JOIN sources s ON n.source_id = s.id
+        JOIN news_topics nt ON n.id = nt.news_id
+        WHERE nt.topic_id = ?
+        ORDER BY COALESCE(n.published_at, n.created_at) DESC
+        LIMIT 100
+    `).bind(topicId).all<NewsRow>();
+
+    const news = results ?? [];
+    const html = renderTopicPage(news, topicRow.title, user);
+
+    return new Response(html, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
 });
 
 // --- GET /user : User's voted news ---
@@ -430,6 +497,91 @@ async function performRSSFetch(env: Env): Promise<void> {
         }
     }
 
+
+    // --- CLUSTERING LOGIC: Process newly inserted but unclustered news ---
+    try {
+        console.log(`[CLUSTERING] Starting clustering for new articles...`);
+        const { results: unclustered } = await env.DB.prepare(`
+            SELECT n.id, n.title, n.description
+            FROM news n
+            LEFT JOIN news_topics nt ON n.id = nt.news_id
+            WHERE nt.news_id IS NULL
+            ORDER BY n.created_at ASC
+            LIMIT 50
+        `).all<{ id: number; title: string; description: string }>();
+
+        if (unclustered && unclustered.length > 0) {
+            console.log(`[CLUSTERING] Found ${unclustered.length} unclustered articles. Processing...`);
+            let clusteredCount = 0;
+            let newTopicCount = 0;
+
+            // Prepare texts for batch embedding
+            const textsToEmbed = unclustered.map(item =>
+                `${item.title} ${item.description || ""}`.substring(0, 1000)
+            );
+
+            // 1. Generate Embeddings in a SINGLE batch call
+            console.log(`[CLUSTERING] Generating embeddings for ${textsToEmbed.length} articles...`);
+            const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: textsToEmbed });
+            const vectors = embedRes.data;
+
+            // 2. Process each item with its corresponding vector
+            // Note: Vectorize currently doesn't support batch queries, so we still loop queries,
+            // but we'll limit the processing batch size if needed (subrequest limit is usually 50 per Worker request).
+            // To be safe against 50 subreq limit (fetch + AI + queries), let's process max 30 unclustered items per cron.
+            const processLimit = Math.min(unclustered.length, 30);
+
+            for (let i = 0; i < processLimit; i++) {
+                const item = unclustered[i];
+                const vector = vectors[i];
+
+                // Search Vectorize
+                const searchRes = await env.VECTORIZE.query(vector, { topK: 3 });
+                const matches = searchRes.matches.filter((m: any) => m.score > 0.45);
+
+                if (matches.length > 0) {
+                    // 3a. Map to existing topics
+                    for (const match of matches) {
+                        try {
+                            await env.DB.prepare(
+                                "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
+                            ).bind(item.id, parseInt(match.id, 10), match.score).run();
+
+                            // Update the topic's updated_at timestamp so it floats to the top of "Hot Topics"
+                            await env.DB.prepare(
+                                "UPDATE topics SET updated_at = datetime('now') WHERE id = ?"
+                            ).bind(parseInt(match.id, 10)).run();
+                        } catch (e) {
+                            // Ignore unique constraint violations
+                        }
+                    }
+                    clusteredCount++;
+                } else {
+                    // 3b. Create new topic
+                    const newTopic = await env.DB.prepare(
+                        "INSERT INTO topics (title) VALUES (?) RETURNING id"
+                    ).bind(item.title).first<{ id: number }>();
+
+                    if (newTopic) {
+                        await env.DB.prepare(
+                            "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
+                        ).bind(item.id, newTopic.id, 1.0).run();
+
+                        await env.VECTORIZE.insert([{
+                            id: newTopic.id.toString(),
+                            values: vector
+                        }]);
+                        newTopicCount++;
+                    }
+                }
+            }
+            console.log(`[CLUSTERING] Complete. Mapped to existing: ${clusteredCount}, Created new topics: ${newTopicCount}`);
+        } else {
+            console.log(`[CLUSTERING] 0 unclustered articles found. Skipping.`);
+        }
+    } catch (err) {
+        console.error(`[CLUSTERING ERROR] Failed to perform clustering:`, err);
+    }
 
     const elapsed = Date.now() - startTime;
     console.log(`[CRON] ========== RSS fetch complete in ${elapsed}ms ==========`);

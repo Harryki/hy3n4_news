@@ -61,3 +61,25 @@ CREATE TABLE IF NOT EXISTS clicks (
 CREATE INDEX IF NOT EXISTS idx_news_upvotes_created ON news(upvotes DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_news_source ON news(source_id);
 CREATE INDEX IF NOT EXISTS idx_clicks_news ON clicks(news_id);
+
+-- Clustering: Topics
+CREATE TABLE IF NOT EXISTS topics (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  is_active INTEGER NOT NULL DEFAULT 1
+);
+
+-- Clustering: M:N Mapping between news and topics
+CREATE TABLE IF NOT EXISTS news_topics (
+  news_id INTEGER NOT NULL,
+  topic_id INTEGER NOT NULL,
+  similarity_score REAL,
+  PRIMARY KEY (news_id, topic_id),
+  FOREIGN KEY (news_id) REFERENCES news(id) ON DELETE CASCADE,
+  FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_topics_topic ON news_topics(topic_id);
+CREATE INDEX IF NOT EXISTS idx_topics_updated ON topics(updated_at DESC);

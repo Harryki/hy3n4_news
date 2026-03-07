@@ -42,8 +42,66 @@ class Router {
             }
         }
 
-        return new Response("Not Found", { status: 404 });
+        return getNotFoundResponse();
     }
+}
+
+export function getNotFoundResponse(): Response {
+    const content = `
+        <div style="text-align: center; margin-top: 40px;">
+            <h2>404 - Page Not Found</h2>
+            <p>길을 잃으셨나요? 홈으로 돌아가세요!</p>
+            <pre style="margin-top: 20px; padding: 20px; font-family: monospace; color: var(--border); font-size: 8px; text-align: center; display: inline-block; background: rgba(87, 53, 43, 0.05); border-radius: 8px; line-height: 1.2;">
+                                       ░░                                       
+                                     ░▓▓▓▓▓      ▒▒                             
+                                   ▒▓▓▓▓▓▒▒░    ▓▓▒                             
+                                  ░▓▓▓▓▓▓▓▓▓  ░▓▓▓▒                             
+                             ░▓░ ░▓▓▓▓▓▓▓▓▒▓▓░░░▒▓▒                             
+                           ▓▓▓▓  ▓▓▓▓▓▓▓▓▓▓▓▓░░░░░▒▒                            
+                        ▒▓▓▓▓▒  ▒▓▓▓▓▓▓▒▒▓▒░░░░░░░░░░▒                          
+                     ░▓▓▓▓▓▓     ▓▓▓▓▓▓▓░░░░░░░░░░░░░░░▓                        
+                   ▓▓▓▓▓▓▓▓  ░░  ▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░▓                      
+                ▒▓▓▓▓▓▓▓▓▒  ░░░    ▓▓▓░░░░░░░░░░░░░░░░░░░░▒░                    
+              ▓▓▓▓▓▓▓▓▓▓   ░░░░░░░    ░░░░░░░░░░░▒▓▒  ▓▓▓▒▒▓                    
+             ▒▓▓▓▓▓▓▓▓▓   ░░░░░░░░░░░░░░░░░░░░░░░░▓▒  ▓▓▓▓▓▓▓░                  
+            ░▓▓▓▓▓▓▓▓▒  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒░░░░▓▓▓▓▓▓▒                
+            ▒▓▓▓▓▓▓▓▓   ░░░░░░░░░░░░▒░░░░░░░░░░░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▒             
+           ░▓▓▓▓▓▓▓▓▓▒  ░░░░░░░░░░░░▓░░░░░░░░░░░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▒           
+           ▓▓▓▓▓▓▓▓▓▓▓▒  ░░░░░░░░░░░▒▓░░░░░░░░░░░░░▓▒░░░▓▓▓▓▓▓▓▓▓▓▓▓            
+          ░▓▓▓▓▓▓▓▓▓▓▓▓  ░░░░░░░░░░░░▒▓▓░░░░░░░░░▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓             
+          ▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ░░░░░░░░░░░░░▓▓▓▓▓▒░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░              
+          ▓▓▓▓▓▓▓▓▓▓▓▓▓▓   ░░░░░░░░░░░░▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                
+         ░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ░░░░░░░░░░▓▓▓▓▓▓▓▓▓░                                 
+           ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒  ░░░░░░░▓▓▓▓▓▓▓▓▓▓                                   
+            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ░░░░░▓▓▓▓▓▓▓▓▓▓▓                                    
+             ▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ░░▓▓▓▓▓▓▓▓▓▓▓▓                                     
+              ▓▓▓▓▓▓▓▓▓▓▓▓▓▒ ▓▓▓▓▓▓▓▓▓▓▓▓▓                                      
+               ░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                      
+                 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                                       
+                  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                                      
+                   ▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                                      
+                    ░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                     
+                      ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                                     
+                       ▓▓▓▓▓▓▓▒▓▓▓▓▓▓▓▓▓▓▓▓░                                    
+                        ▒▓▓▓▓▓▒▓▓▓▓▓▓▓▓▓▓▓▓                                     
+                          ░▓▓▓▓▓▒▓▓▓▓▓▓▓▓▓░                                     
+                            ░▓▒▓▒▓▓▓▓▓▓▒▓▓                                      
+                               ▓▓▓▒▓▒▒▓▓▓░                                      
+                                 ▒▓▒▓▓▓▓▓                                       
+                                   ▒▓▓▒▒▒                                       
+                                     ░▒▓                                        
+            </pre>
+            <p>
+            <a href="/" style="color: var(--accent); font-weight: bold; text-decoration: none; margin-top: 20px; display: inline-block;">&larr; 홈으로 돌아가기</a>
+            </p>
+        </div>
+    `;
+    const html = renderStaticPage(content, null, "404 Not Found");
+
+    return new Response(html, {
+        status: 404,
+        headers: { "Content-Type": "text/html; charset=utf-8" }
+    });
 }
 
 const router = new Router();
@@ -177,22 +235,22 @@ router.get(/^\/go\/(\d+)$/, async (request, env, ctx, match) => {
     const newsId = parseInt(match![1], 10);
     const user = await getSessionUser(request, env);
 
-    // Record click & increment view count
+    // Get original URL to verify existence and redirect
+    const row = await env.DB.prepare(
+        "SELECT url FROM news WHERE id = ?"
+    ).bind(newsId).first<{ url: string }>();
+
+    if (!row) {
+        return getNotFoundResponse();
+    }
+
+    // Record click & increment view count only if news exists
     await env.DB.prepare(
         "INSERT INTO clicks (user_id, news_id) VALUES (?, ?)"
     ).bind(user?.id ?? null, newsId).run();
     await env.DB.prepare(
         "UPDATE news SET view_count = view_count + 1 WHERE id = ?"
     ).bind(newsId).run();
-
-    // Get original URL and redirect
-    const row = await env.DB.prepare(
-        "SELECT url FROM news WHERE id = ?"
-    ).bind(newsId).first<{ url: string }>();
-
-    if (!row) {
-        return new Response("Not Found", { status: 404 });
-    }
 
     return new Response(null, {
         status: 302,

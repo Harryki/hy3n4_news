@@ -336,32 +336,34 @@ async function performRSSFetch(env: Env): Promise<void> {
         }
 
         const { source, items } = result.value;
-        let inserted = 0;
-        let skipped = 0;
-        let errors = 0;
-
-        for (const item of items) {
-            try {
-                const insertResult = await env.DB.prepare(
-                    "INSERT OR IGNORE INTO news (source_id, title, url, description, published_at) VALUES (?, ?, ?, ?, ?)"
-                ).bind(source.id, item.title, item.link, item.description, item.publishedAt).run();
-
-                if (insertResult.meta.changes > 0) {
-                    inserted++;
-                } else {
-                    skipped++;
-                }
-            } catch (err) {
-                errors++;
-                console.error(`[DB] Insert failed for "${item.title}" (${source.name}):`, err);
-            }
+        if (items.length === 0) {
+            console.log(`[RESULT] ${source.name}: 0 items found.`);
+            continue;
         }
 
-        totalInserted += inserted;
-        totalSkipped += skipped;
-        totalErrors += errors;
+        try {
+            // Prepare an array of D1 statements for batching
+            const statements = items.map(item =>
+                env.DB.prepare(
+                    "INSERT OR IGNORE INTO news (source_id, title, url, description, published_at) VALUES (?, ?, ?, ?, ?)"
+                ).bind(source.id, item.title, item.link, item.description, item.publishedAt)
+            );
 
-        console.log(`[RESULT] ${source.name}: +${inserted} new | ${skipped} duplicates | ${errors} errors (of ${items.length} total)`);
+            // Execute all inserts for this source in a single network round-trip
+            const batchResults = await env.DB.batch(statements);
+
+            // Calculate how many were newly inserted vs ignored
+            const inserted = batchResults.reduce((sum, res) => sum + (res.meta.changes > 0 ? 1 : 0), 0);
+            const skipped = items.length - inserted;
+
+            totalInserted += inserted;
+            totalSkipped += skipped;
+
+            console.log(`[RESULT] ${source.name}: +${inserted} new | ${skipped} duplicates | 0 errors (of ${items.length} total)`);
+        } catch (err) {
+            totalErrors += items.length;
+            console.error(`[DB ERROR] Batch insert failed for ${source.name}:`, err);
+        }
     }
 
 

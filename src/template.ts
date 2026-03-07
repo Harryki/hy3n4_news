@@ -500,7 +500,7 @@ export function renderPage(
     // Slice by currentLimit
     const sourceItems = groupedNews[sourceName].slice(0, currentLimit);
     // Re-rank starting from 1 for each column display
-    const itemsHtml = sourceItems.map((item, i) => renderNewsItem(item, i + 1)).join("\\n");
+    const itemsHtml = sourceItems.map((item, i) => renderNewsItem(item, i + 1)).join("\n");
     return `
       <div class="news-column">
         <h2 class="column-header">${escapeHtml(sourceName)}</h2>
@@ -509,7 +509,7 @@ export function renderPage(
         </ol>
       </div>
     `;
-  }).join("\\n");
+  }).join("\n");
 
   const filterHtml = !pageTitle ? `
   <div class="filters">

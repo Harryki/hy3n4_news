@@ -144,7 +144,7 @@ router.get("/", async (request, env, ctx) => {
 
     // Rank all fetched news by hnScore (per source limitation is handled in renderPage)
     const ranked = news
-        .map((item) => ({ ...item, score: hnScore(item.upvotes, item.published_at, now) }))
+        .map((item) => ({ ...item, score: hnScore(item.upvotes, item.view_count || 0, item.published_at, now) }))
         .sort((a, b) => b.score - a.score);
 
     const html = renderPage(ranked, user, "", limit, timeHours);
@@ -369,7 +369,13 @@ async function performRSSFetch(env: Env): Promise<void> {
         sources.map(async (source) => {
             console.log(`[FETCH] ${source.name}: Fetching ${source.url}`);
             const res = await fetch(source.url, {
-                headers: { "User-Agent": "hy3n4-news-bot/1.0" },
+                headers: {
+                    "User-Agent": "hy3n4-news-bot/1.0",
+                    "Cache-Control": "no-cache"
+                },
+                cf: {
+                    cacheTtl: 0
+                }
             });
             console.log(`[FETCH] ${source.name}: HTTP ${res.status} ${res.statusText}`);
             if (!res.ok) {

@@ -53,6 +53,7 @@ function stripHtmlTags(html: string): string {
 }
 
 export function parseRSS(xml: string, sourceName: string): RSSItem[] {
+    console.log(`[PARSE] ${sourceName}: Raw XML Length is ${xml.length} characters. Prefix: ${xml.substring(0, 50).replace(/\n/g, ' ')}...`);
     const parsed = parser.parse(xml);
 
     const channel = parsed?.rss?.channel;

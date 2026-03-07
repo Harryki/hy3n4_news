@@ -48,13 +48,25 @@ class Router {
 
 const router = new Router();
 
+function getCookie(request: Request, name: string): string | null {
+    const cookieStr = request.headers.get("Cookie") || "";
+    const match = cookieStr.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+    return match ? match[1] : null;
+}
+
 // --- GET / : News list ---
 router.get("/", async (request, env, ctx) => {
     const url = new URL(request.url);
     const user = await getSessionUser(request, env);
 
-    const limit = parseInt(url.searchParams.get("limit") || "25", 10);
-    const timeHours = parseInt(url.searchParams.get("time") || "24", 10);
+    const queryLimit = url.searchParams.get("limit");
+    const queryTime = url.searchParams.get("time");
+
+    const cookieLimit = getCookie(request, "pref_limit");
+    const cookieTime = getCookie(request, "pref_time");
+
+    const limit = parseInt(queryLimit || cookieLimit || "25", 10);
+    const timeHours = parseInt(queryTime || cookieTime || "24", 10);
 
     // Fetch based on time threshold
     const now = new Date();
@@ -78,9 +90,18 @@ router.get("/", async (request, env, ctx) => {
         .sort((a, b) => b.score - a.score);
 
     const html = renderPage(ranked, user, "", limit, timeHours);
-    return new Response(html, {
+    const response = new Response(html, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
     });
+
+    if (queryLimit) {
+        response.headers.append("Set-Cookie", `pref_limit=${limit}; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
+    }
+    if (queryTime) {
+        response.headers.append("Set-Cookie", `pref_time=${timeHours}; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
+    }
+
+    return response;
 });
 
 // --- GET /user : User's voted news ---

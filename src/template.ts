@@ -772,7 +772,7 @@ export function renderTopicPage(
 
   const content = `
     <div style="padding: 24px 20px; max-width: 800px; margin: 0 auto;">
-      <h2 style="font-size: 22px; margin-bottom: 24px; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px;">🔥 ${escapeHtml(topicTitle)}</h2>
+      <h2 style="font-size: 22px; margin-bottom: 24px; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px;">${escapeHtml(topicTitle)}</h2>
       <ul class="news-list" style="list-style: none; padding: 0;">
         ${itemsHtml}
       </ul>

@@ -195,7 +195,7 @@ router.get("/", async (request, env, ctx) => {
     });
     const hotKeywords = Array.from(keywordFreq.entries())
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
+        .slice(0, 20)
         .map(e => e[0]);
 
     // Rank all fetched news by hnScore (per source limitation is handled in renderPage)
@@ -460,6 +460,7 @@ router.get("/___force-ai-update", async (request, env, ctx) => {
         return new Response("Unauthorized", { status: 401 });
     }
     try {
+        // fetch 150 most recent news articles that have not been assigned any topics
         const { results: unclustered } = await env.DB.prepare(`
             SELECT n.id
             FROM news n
@@ -722,6 +723,9 @@ export default {
         if (topicsToCheck.size > 0) {
             const topicIdList = Array.from(topicsToCheck);
             const topicPlaceholders = topicIdList.map(() => "?").join(",");
+
+            // find topics that are missing keywords but are already associated with 
+            // at least two news articles
             const { results: topicsToSummarize } = await env.DB.prepare(`
                 SELECT t.id, group_concat(n.title, ' || ') as titles
                 FROM topics t

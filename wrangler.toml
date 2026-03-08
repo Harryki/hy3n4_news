@@ -11,11 +11,21 @@ remote = true
 
 [[vectorize]]
 binding = "VECTORIZE"
-index_name = "news-topics-index"
+index_name = "news-topics-index-dev"
 remote = true
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/30 * * * *"]
+
+[[queues.producers]]
+binding = "NEWS_PROCESSING_QUEUE"
+queue = "news-processing-queue"
+
+[[queues.consumers]]
+queue = "news-processing-queue"
+max_batch_size = 50
+max_batch_timeout = 5
+max_concurrency = 1
 
 [[d1_databases]]
 binding = "DB"
@@ -32,7 +42,7 @@ routes = [
 ]
 
 [env.production.triggers]
-crons = ["0 * * * *"]
+crons = ["*/30 * * * *"]
 
 [env.production.vars]
 GOOGLE_CLIENT_ID = "5439287092-mfrbcjgop304q6d8693avajaagc8gk87.apps.googleusercontent.com"
@@ -48,3 +58,13 @@ binding = "AI"
 [[env.production.vectorize]]
 binding = "VECTORIZE"
 index_name = "news-topics-index"
+
+[[env.production.queues.producers]]
+binding = "NEWS_PROCESSING_QUEUE"
+queue = "news-processing-queue"
+
+[[env.production.queues.consumers]]
+queue = "news-processing-queue"
+max_batch_size = 50
+max_batch_timeout = 5
+max_concurrency = 1

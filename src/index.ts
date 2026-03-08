@@ -119,48 +119,91 @@ router.get("/", async (request, env, ctx) => {
 
     const queryLimit = url.searchParams.get("limit");
     const queryTime = url.searchParams.get("time");
+    const queryKeywords = url.searchParams.get("keywords");
 
     const cookieLimit = getCookie(request, "pref_limit");
     const cookieTime = getCookie(request, "pref_time");
 
+    const queryPage = url.searchParams.get("page");
+    const page = parseInt(queryPage || "1", 10);
     const limit = parseInt(queryLimit || cookieLimit || "25", 10);
     const timeHours = parseInt(queryTime || cookieTime || "24", 10);
+    const selectedKeywords = queryKeywords ? queryKeywords.split(',').map(k => k.trim()).filter(k => k !== '') : [];
 
     // Fetch based on time threshold
     const now = new Date();
     const cutoffTime = new Date(now.getTime() - timeHours * 60 * 60 * 1000);
     const cutoffISO = cutoffTime.toISOString();
 
-    const { results } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name
+    let newsQuery = `
+        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name,
+               (SELECT group_concat(t.keywords) FROM news_topics nt JOIN topics t ON nt.topic_id = t.id WHERE nt.news_id = n.id) as keywords
         FROM news n
         JOIN sources s ON n.source_id = s.id
         WHERE n.published_at >= ?
         ORDER BY n.created_at DESC
         LIMIT 500
-    `).bind(cutoffISO).all<NewsRow>();
+    `;
+    let queryParams: any[] = [cutoffISO];
+
+    if (selectedKeywords.length > 0) {
+        const likeConditions = selectedKeywords.map(() => `t.keywords LIKE ?`).join(' AND ');
+        const likeParams = selectedKeywords.map(k => `%${k}%`);
+        const offset = (page - 1) * 30;
+
+        newsQuery = `
+            SELECT DISTINCT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name,
+                   (SELECT group_concat(t2.keywords) FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
+            FROM news n
+            JOIN sources s ON n.source_id = s.id
+            JOIN news_topics nt ON n.id = nt.news_id
+            JOIN topics t ON nt.topic_id = t.id
+            WHERE (${likeConditions})
+            ORDER BY n.created_at DESC
+            LIMIT 30 OFFSET ?
+        `;
+        queryParams = [...likeParams, offset];
+    }
+
+    const { results } = await env.DB.prepare(newsQuery).bind(...queryParams).all<NewsRow>();
 
     const news = results ?? [];
 
     // Fetch Top Topics
     const { results: topics } = await env.DB.prepare(`
-        SELECT t.id, t.title, count(nt.news_id) as article_count
+        SELECT t.id, t.title, t.keywords, count(nt.news_id) as article_count
         FROM topics t
         JOIN news_topics nt ON t.id = nt.topic_id
-        WHERE t.updated_at >= datetime('now', '-48 hours')
+        WHERE t.updated_at >= datetime('now', '-24 hours')
         GROUP BY t.id
         HAVING article_count > 1
-        ORDER BY article_count DESC, t.updated_at DESC
+        ORDER BY t.updated_at DESC, article_count DESC
         LIMIT 10
     `).all<TopicRow>();
     const hotTopics = topics ?? [];
+
+    const keywordFreq = new Map<string, number>();
+    hotTopics.forEach(t => {
+        if (t.keywords) {
+            t.keywords.split(',').forEach(k => {
+                const tk = k.trim();
+                if (tk) {
+                    keywordFreq.set(tk, (keywordFreq.get(tk) || 0) + 1);
+                }
+            });
+        }
+    });
+    const hotKeywords = Array.from(keywordFreq.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(e => e[0]);
 
     // Rank all fetched news by hnScore (per source limitation is handled in renderPage)
     const ranked = news
         .map((item) => ({ ...item, score: hnScore(item.upvotes, item.view_count || 0, item.published_at, now) }))
         .sort((a, b) => b.score - a.score);
 
-    const html = renderPage(ranked, user, "", limit, timeHours, hotTopics);
+    const html = renderPage(ranked, user, "", limit, timeHours, hotTopics, hotKeywords, selectedKeywords, page);
     const response = new Response(html, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
     });
@@ -173,6 +216,22 @@ router.get("/", async (request, env, ctx) => {
     }
 
     return response;
+});
+
+// --- GET /debug/headers : Test incoming headers for OAuth ---
+router.get("/debug/headers", async (request, env, ctx) => {
+    const url = new URL(request.url);
+    const headers: Record<string, string> = {};
+    request.headers.forEach((value, key) => { headers[key] = value; });
+
+    return new Response(JSON.stringify({
+        url: request.url,
+        origin: url.origin,
+        hostHeader: request.headers.get("Host"),
+        allHeaders: headers
+    }, null, 2), {
+        headers: { "Content-Type": "application/json" }
+    });
 });
 
 // --- GET /debug/vector : Dev Debugging Route ---
@@ -212,7 +271,8 @@ router.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     if (!topicRow) return getNotFoundResponse();
 
     const { results } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name
+        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name,
+               (SELECT group_concat(t2.keywords) FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
         FROM news n
         JOIN sources s ON n.source_id = s.id
         JOIN news_topics nt ON n.id = nt.news_id
@@ -241,7 +301,8 @@ router.get("/user", async (request, env, ctx) => {
     }
 
     const { results } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.published_at, n.created_at, s.name as source_name
+        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.published_at, n.created_at, s.name as source_name,
+               (SELECT group_concat(t2.keywords) FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
         FROM news n
         JOIN sources s ON n.source_id = s.id
         JOIN votes v ON v.news_id = n.id
@@ -386,7 +447,41 @@ router.get("/___force-rss-update", async (request, env) => {
     }
     try {
         await performRSSFetch(env);
-        return new Response("Cron triggered successfully.", { status: 200 });
+        return new Response("RSS Fetch triggered successfully.", { status: 200 });
+    } catch (error: any) {
+        return new Response("Failed: " + error.message, { status: 500 });
+    }
+});
+
+router.get("/___force-ai-update", async (request, env, ctx) => {
+    const url = new URL(request.url);
+    const key = url.searchParams.get("key");
+    if (!key || key !== (env as any).CRON_SECRET) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+    try {
+        const { results: unclustered } = await env.DB.prepare(`
+            SELECT n.id
+            FROM news n
+            LEFT JOIN news_topics nt ON n.id = nt.news_id
+            WHERE nt.news_id IS NULL
+            ORDER BY n.created_at DESC
+            LIMIT 150
+        `).all<{ id: number }>();
+
+        if (unclustered && unclustered.length > 0 && env.NEWS_PROCESSING_QUEUE) {
+            const messages = unclustered.map(item => ({ body: { news_id: item.id } }));
+
+            const BATCH_LIMIT = 100;
+            for (let i = 0; i < messages.length; i += BATCH_LIMIT) {
+                const chunk = messages.slice(i, i + BATCH_LIMIT);
+                await env.NEWS_PROCESSING_QUEUE.sendBatch(chunk);
+            }
+
+            return new Response(`Queued ${unclustered.length} articles for processing.`, { status: 200 });
+        }
+
+        return new Response("No unclustered articles found to process.", { status: 200 });
     } catch (error: any) {
         return new Response("Failed: " + error.message, { status: 500 });
     }
@@ -473,22 +568,42 @@ async function performRSSFetch(env: Env): Promise<void> {
         }
 
         try {
-            // Prepare an array of D1 statements for batching
+            // Prepare an array of D1 statements for batching (return id if newly inserted)
             const statements = items.map(item =>
                 env.DB.prepare(
-                    "INSERT OR IGNORE INTO news (source_id, title, url, description, published_at) VALUES (?, ?, ?, ?, ?)"
+                    "INSERT INTO news (source_id, title, url, description, published_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING RETURNING id"
                 ).bind(source.id, item.title, item.link, item.description, item.publishedAt)
             );
 
             // Execute all inserts for this source in a single network round-trip
-            const batchResults = await env.DB.batch(statements);
+            const batchResults = await env.DB.batch<{ id: number }>(statements);
 
-            // Calculate how many were newly inserted vs ignored
-            const inserted = batchResults.reduce((sum, res) => sum + (res.meta.changes > 0 ? 1 : 0), 0);
+            // Extract newly inserted IDs
+            const newIds: number[] = [];
+            for (const res of batchResults) {
+                if (res.results && res.results.length > 0) {
+                    newIds.push(res.results[0].id);
+                }
+            }
+
+            const inserted = newIds.length;
             const skipped = items.length - inserted;
 
             totalInserted += inserted;
             totalSkipped += skipped;
+
+            // Publish to queue if there are new items (max 100 per sendBatch)
+            if (inserted > 0 && env.NEWS_PROCESSING_QUEUE) {
+                const messages = newIds.map(id => ({ body: { news_id: id } }));
+
+                // Cloudflare sendBatch has a strict limit of 100 messages per call
+                const BATCH_LIMIT = 100;
+                for (let i = 0; i < messages.length; i += BATCH_LIMIT) {
+                    const chunk = messages.slice(i, i + BATCH_LIMIT);
+                    await env.NEWS_PROCESSING_QUEUE.sendBatch(chunk);
+                }
+                console.log(`[QUEUE] Pushed ${inserted} new articles to processing queue.`);
+            }
 
             console.log(`[RESULT] ${source.name}: +${inserted} new | ${skipped} duplicates | 0 errors (of ${items.length} total)`);
         } catch (err) {
@@ -497,96 +612,10 @@ async function performRSSFetch(env: Env): Promise<void> {
         }
     }
 
-
-    // --- CLUSTERING LOGIC: Process newly inserted but unclustered news ---
-    try {
-        console.log(`[CLUSTERING] Starting clustering for new articles...`);
-        const { results: unclustered } = await env.DB.prepare(`
-            SELECT n.id, n.title, n.description
-            FROM news n
-            LEFT JOIN news_topics nt ON n.id = nt.news_id
-            WHERE nt.news_id IS NULL
-            ORDER BY n.created_at ASC
-            LIMIT 50
-        `).all<{ id: number; title: string; description: string }>();
-
-        if (unclustered && unclustered.length > 0) {
-            console.log(`[CLUSTERING] Found ${unclustered.length} unclustered articles. Processing...`);
-            let clusteredCount = 0;
-            let newTopicCount = 0;
-
-            // Prepare texts for batch embedding
-            const textsToEmbed = unclustered.map(item =>
-                `${item.title} ${item.description || ""}`.substring(0, 1000)
-            );
-
-            // 1. Generate Embeddings in a SINGLE batch call
-            console.log(`[CLUSTERING] Generating embeddings for ${textsToEmbed.length} articles...`);
-            const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: textsToEmbed });
-            const vectors = embedRes.data;
-
-            // 2. Process each item with its corresponding vector
-            // Note: Vectorize currently doesn't support batch queries, so we still loop queries,
-            // but we'll limit the processing batch size if needed (subrequest limit is usually 50 per Worker request).
-            // To be safe against 50 subreq limit (fetch + AI + queries), let's process max 30 unclustered items per cron.
-            const processLimit = Math.min(unclustered.length, 30);
-
-            for (let i = 0; i < processLimit; i++) {
-                const item = unclustered[i];
-                const vector = vectors[i];
-
-                // Search Vectorize
-                const searchRes = await env.VECTORIZE.query(vector, { topK: 3 });
-                const matches = searchRes.matches.filter((m: any) => m.score > 0.45);
-
-                if (matches.length > 0) {
-                    // 3a. Map to existing topics
-                    for (const match of matches) {
-                        try {
-                            await env.DB.prepare(
-                                "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
-                            ).bind(item.id, parseInt(match.id, 10), match.score).run();
-
-                            // Update the topic's updated_at timestamp so it floats to the top of "Hot Topics"
-                            await env.DB.prepare(
-                                "UPDATE topics SET updated_at = datetime('now') WHERE id = ?"
-                            ).bind(parseInt(match.id, 10)).run();
-                        } catch (e) {
-                            // Ignore unique constraint violations
-                        }
-                    }
-                    clusteredCount++;
-                } else {
-                    // 3b. Create new topic
-                    const newTopic = await env.DB.prepare(
-                        "INSERT INTO topics (title) VALUES (?) RETURNING id"
-                    ).bind(item.title).first<{ id: number }>();
-
-                    if (newTopic) {
-                        await env.DB.prepare(
-                            "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
-                        ).bind(item.id, newTopic.id, 1.0).run();
-
-                        await env.VECTORIZE.insert([{
-                            id: newTopic.id.toString(),
-                            values: vector
-                        }]);
-                        newTopicCount++;
-                    }
-                }
-            }
-            console.log(`[CLUSTERING] Complete. Mapped to existing: ${clusteredCount}, Created new topics: ${newTopicCount}`);
-        } else {
-            console.log(`[CLUSTERING] 0 unclustered articles found. Skipping.`);
-        }
-    } catch (err) {
-        console.error(`[CLUSTERING ERROR] Failed to perform clustering:`, err);
-    }
-
-    const elapsed = Date.now() - startTime;
-    console.log(`[CRON] ========== RSS fetch complete in ${elapsed}ms ==========`);
-    console.log(`[CRON] Summary: ${totalInserted} inserted | ${totalSkipped} skipped | ${totalErrors} errors`);
+    console.log(`[CRON] RSS Summary: ${totalInserted} inserted | ${totalSkipped} skipped | ${totalErrors} errors`);
 }
+
+// Removed: performAIClustering (now handled by Queue Consumer)
 
 export default {
     async fetch(
@@ -602,6 +631,148 @@ export default {
         env: Env,
         ctx: ExecutionContext
     ): Promise<void> {
-        await performRSSFetch(env);
+        ctx.waitUntil(performRSSFetch(env));
+    },
+
+    async queue(batch: MessageBatch<any>, env: Env, ctx: ExecutionContext): Promise<void> {
+        console.log(`[QUEUE] Received batch of ${batch.messages.length} messages`);
+
+        const newsIds = batch.messages.map(m => m.body.news_id).filter(id => id !== undefined);
+        if (newsIds.length === 0) return;
+
+        // Fetch article details
+        const placeholders = newsIds.map(() => "?").join(",");
+        const { results: unclustered } = await env.DB.prepare(`
+            SELECT id, title, description
+            FROM news
+            WHERE id IN (${placeholders})
+        `).bind(...newsIds).all<{ id: number; title: string; description: string }>();
+
+        if (!unclustered || unclustered.length === 0) return;
+
+        console.log(`[QUEUE] Processing ${unclustered.length} articles for clustering...`);
+        let clusteredCount = 0;
+        let newTopicCount = 0;
+        const topicsToCheck = new Set<number>();
+
+        // 1. Generate Embeddings (in smaller chunks to avoid Network Connection Lost)
+        const textsToEmbed = unclustered.map(item =>
+            `${item.title} ${item.description || ""}`.substring(0, 1000)
+        );
+
+        let vectors: any[] = [];
+        const EMBED_CHUNK_SIZE = 10;
+        for (let i = 0; i < textsToEmbed.length; i += EMBED_CHUNK_SIZE) {
+            const chunk = textsToEmbed.slice(i, i + EMBED_CHUNK_SIZE);
+            const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: chunk });
+            vectors = vectors.concat(embedRes.data);
+        }
+
+        // 2. Process each item
+        for (let i = 0; i < unclustered.length; i++) {
+            const item = unclustered[i];
+            const vector = vectors[i];
+
+            // Search Vectorize
+            const searchRes = await env.VECTORIZE.query(vector, { topK: 3 });
+            const matches = searchRes.matches.filter((m: any) => m.score > 0.45);
+
+            if (matches.length > 0) {
+                // Map to existing topics
+                for (const match of matches) {
+                    const topicId = parseInt(match.id, 10);
+                    try {
+                        await env.DB.prepare(
+                            "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
+                        ).bind(item.id, topicId, match.score).run();
+
+                        await env.DB.prepare(
+                            "UPDATE topics SET updated_at = datetime('now') WHERE id = ?"
+                        ).bind(topicId).run();
+
+                        topicsToCheck.add(topicId);
+                    } catch (e) {
+                        // Ignore unique constraint violations
+                    }
+                }
+                clusteredCount++;
+            } else {
+                // Create new topic
+                const newTopic = await env.DB.prepare(
+                    "INSERT INTO topics (title) VALUES (?) RETURNING id"
+                ).bind(item.title).first<{ id: number }>();
+
+                if (newTopic) {
+                    await env.DB.prepare(
+                        "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
+                    ).bind(item.id, newTopic.id, 1.0).run();
+
+                    await env.VECTORIZE.insert([{
+                        id: newTopic.id.toString(),
+                        values: vector
+                    }]);
+                    newTopicCount++;
+                }
+            }
+        }
+
+        console.log(`[QUEUE] Clustering complete. Mapped: ${clusteredCount}, New topics: ${newTopicCount}`);
+
+        // 3. Summarize newly formed clusters
+        if (topicsToCheck.size > 0) {
+            const topicIdList = Array.from(topicsToCheck);
+            const topicPlaceholders = topicIdList.map(() => "?").join(",");
+            const { results: topicsToSummarize } = await env.DB.prepare(`
+                SELECT t.id, group_concat(n.title, ' || ') as titles
+                FROM topics t
+                JOIN news_topics nt ON t.id = nt.topic_id
+                JOIN news n ON nt.news_id = n.id
+                WHERE t.id IN (${topicPlaceholders}) AND t.keywords IS NULL
+                GROUP BY t.id
+                HAVING count(n.id) >= 2
+            `).bind(...topicIdList).all<{ id: number, titles: string }>();
+
+            if (topicsToSummarize && topicsToSummarize.length > 0) {
+                console.log(`[QUEUE] Found ${topicsToSummarize.length} topics to summarize.`);
+
+                for (const topic of topicsToSummarize) {
+                    const prompt = `You are a professional Korean news editor. Read the following news article titles and provide a concise, unified topic title (under 20 Korean characters) and exactly 3 highly relevant keywords.
+        
+News titles:
+${topic.titles}
+    
+Respond STRICTLY in this JSON format without any markdown blocks or extra conversational text:
+{
+  "title": "단일화된 사건 제목",
+  "keywords": "키워드1, 키워드2, 키워드3"
+}`;
+
+                    try {
+                        const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+                            prompt: prompt,
+                            max_tokens: 256
+                        }) as { response: string };
+
+                        if (aiResponse && aiResponse.response) {
+                            try {
+                                const match = aiResponse.response.match(/\{[\s\S]*\}/);
+                                if (match) {
+                                    const parsed = JSON.parse(match[0]);
+                                    if (parsed.title && parsed.keywords) {
+                                        await env.DB.prepare("UPDATE topics SET title = ?, keywords = ? WHERE id = ?")
+                                            .bind(parsed.title, parsed.keywords, topic.id).run();
+                                        console.log(`[QUEUE] Topic ${topic.id} summarized: ${parsed.title}`);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error(`[QUEUE] JSON Parse failed for topic ${topic.id}`);
+                            }
+                        }
+                    } catch (e: any) {
+                        console.error(`[QUEUE] Summarization failed for topic ${topic.id}:`, e.message);
+                    }
+                }
+            }
+        }
     },
 };

@@ -8,6 +8,7 @@ export interface NewsRow {
   published_at: string | null;
   created_at: string;
   source_name: string;
+  keywords?: string;
 }
 
 export interface UserInfo {
@@ -19,6 +20,7 @@ export interface UserInfo {
 export interface TopicRow {
   id: number;
   title: string;
+  keywords?: string | null;
   article_count: number;
 }
 
@@ -52,9 +54,12 @@ function extractDomain(url: string): string {
   }
 }
 
-function renderNewsItem(item: NewsRow, rank: number): string {
+export function renderNewsItem(item: NewsRow, rank: number): string {
+  const timeString = timeAgo(item.published_at);
   const domain = extractDomain(item.url);
-  const ago = timeAgo(item.published_at ?? item.created_at);
+
+  const keywordHtml = item.keywords ?
+    `<div class="news-item-tags">${item.keywords.split(',').map(k => `#${k.trim()}`).slice(0, 3).join(' ')}</div>` : '';
 
   return `
     <li class="news-item">
@@ -69,13 +74,15 @@ function renderNewsItem(item: NewsRow, rank: number): string {
       </div>
       <div class="news-content">
         <a href="/go/${item.id}" class="news-title" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
+        ${keywordHtml}
         <div class="news-meta">
           <span class="meta-pill meta-points"><span id="score-${item.id}">${item.upvotes}</span> p</span>
           <span class="meta-pill meta-views">𓁹 ${item.view_count}</span>
-          <span class="meta-pill meta-time">${ago}</span>
+          <span class="meta-pill meta-time">${timeString}</span>
         </div>
       </div>
-    </li>`;
+    </li>
+  `;
 }
 
 function getStyles(): string {
@@ -152,48 +159,73 @@ function getStyles(): string {
     .filters {
       display: flex;
       flex-wrap: wrap;
-      gap: 16px;
-      padding: 12px 20px 0;
-      border-bottom: 2px solid var(--border);
-      background: rgba(87, 53, 43, 0.05); /* very light tint of border color */
+      padding: 15px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      background: var(--bg);
+      border-bottom: 1px solid rgba(0,0,0,0.05);
     }
 
     .filter-group {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 11px;
-      font-weight: bold;
-      color: var(--secondary);
-      margin-bottom: 12px;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
     .filter-label {
-      text-transform: uppercase;
-      letter-spacing: 1px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #888;
+      letter-spacing: 0.5px;
+      min-width: 45px;
     }
 
     .filter-btn {
       text-decoration: none;
       color: var(--secondary);
-      padding: 6px 12px;
-      border: 1px solid var(--secondary);
-      border-radius: 4px;
-      background: var(--bg);
-      min-height: 44px;
-      display: inline-flex;
-      align-items: center;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 4px 12px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.05);
+      transition: all 0.2s;
     }
 
     .filter-btn:hover {
+      background: rgba(0,0,0,0.1);
+    }
+
+    .filter-btn.active {
       background: var(--secondary);
       color: var(--bg);
     }
 
-    .filter-btn.active {
-      background: var(--accent);
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .filter-tag {
+      text-decoration: none;
       color: var(--secondary);
-      border-color: var(--accent);
+      background: rgba(229, 166, 87, 0.15);
+      padding: 6px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    .filter-tag:hover {
+      background: rgba(229, 166, 87, 0.3);
+    }
+
+    .filter-tag.active {
+      background: var(--accent);
+      color: var(--bg);
     }
 
     .news-columns {
@@ -232,26 +264,36 @@ function getStyles(): string {
       text-decoration: none;
       background: rgba(229, 166, 87, 0.15);
       color: var(--secondary);
-      padding: 6px 14px;
-      border-radius: 20px;
+      padding: 10px 14px;
+      border-radius: 12px;
       font-size: 13px;
       font-weight: bold;
       border: 1px solid rgba(229, 166, 87, 0.4);
       transition: all 0.2s ease;
       display: inline-flex;
-      align-items: center;
+      flex-direction: column;
+      gap: 5px;
     }
 
     .topic-pill:hover {
-      background: var(--accent);
-      color: var(--bg);
+      background: rgba(229, 166, 87, 0.25);
       border-color: var(--accent);
+    }
+    
+    .topic-pill-header {
+      display: flex;
+      align-items: center;
     }
 
     .topic-pill-count {
       opacity: 0.7;
       font-size: 11px;
       margin-left: 6px;
+    }
+    
+    .topic-pill-keywords {
+      font-size: 11px;
+      color: #828282;
       font-weight: normal;
     }
 
@@ -351,6 +393,18 @@ function getStyles(): string {
       font-size: 11px;
     }
 
+    .news-item-meta {
+      font-size: 11px;
+      color: #828282;
+      margin-top: 6px;
+    }
+    
+    .news-item-tags {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 4px;
+      font-weight: 500;
+    }
     .news-meta {
       display: flex;
       gap: 6px;
@@ -545,7 +599,10 @@ export function renderPage(
   pageTitle: string = "",
   currentLimit: number = 25,
   currentTime: number = 24,
-  hotTopics: TopicRow[] = []
+  hotTopics: TopicRow[] = [],
+  hotKeywords: string[] = [],
+  selectedKeywords: string[] = [],
+  page: number = 1
 ): string {
   // Group news by source_name
   const groupedNews: Record<string, NewsRow[]> = {};
@@ -588,26 +645,54 @@ export function renderPage(
     `;
   }).join("\n");
 
+  // Helper for generating keyword filter URLs
+  const toggleKeywordUrl = (kw: string) => {
+    let newKeywords = [...selectedKeywords];
+    if (newKeywords.includes(kw)) {
+      newKeywords = newKeywords.filter(k => k !== kw);
+    } else {
+      newKeywords.push(kw);
+    }
+    const kwParam = newKeywords.length > 0 ? `&keywords=${encodeURIComponent(newKeywords.join(','))}` : '';
+    return `/?limit=${currentLimit}&time=${currentTime}${kwParam}`;
+  };
+
+  const kwParamStr = selectedKeywords.length > 0 ? `&keywords=${encodeURIComponent(selectedKeywords.join(','))}` : '';
+
   const filterHtml = !pageTitle ? `
   <div class="filters">
+    ${hotKeywords.length > 0 ? `
+    <div class="filter-group">
+      <span class="filter-label">TAGS:</span>
+      <div class="tags-container">
+        ${hotKeywords.map(kw => `<a href="${toggleKeywordUrl(kw)}" class="filter-tag ${selectedKeywords.includes(kw) ? 'active' : ''}">#${escapeHtml(kw)}</a>`).join('')}
+      </div>
+    </div>
+    ` : ''}
     <div class="filter-group">
       <span class="filter-label">LIMIT:</span>
-      ${[5, 10, 15, 25].map(l => `<a href="/?limit=${l}&time=${currentTime}" class="filter-btn ${currentLimit === l ? 'active' : ''}">${l}</a>`).join('')}
+      ${[5, 10, 15, 25].map(l => `<a href="/?limit=${l}&time=${currentTime}${kwParamStr}" class="filter-btn ${currentLimit === l ? 'active' : ''}">${l}</a>`).join('')}
     </div>
+    ${selectedKeywords.length === 0 ? `
     <div class="filter-group">
       <span class="filter-label">TIME:</span>
-      ${[1, 3, 6, 12, 24].map(t => `<a href="/?limit=${currentLimit}&time=${t}" class="filter-btn ${currentTime === t ? 'active' : ''}">${t}h</a>`).join('')}
+      ${[1, 3, 6, 12, 24].map(t => `<a href="/?limit=${currentLimit}&time=${t}${kwParamStr}" class="filter-btn ${currentTime === t ? 'active' : ''}">${t}h</a>`).join('')}
     </div>
+    ` : ''}
   </div>
   ` : '';
 
   let hotTopicsHtml = "";
   if (!pageTitle && hotTopics.length > 0) {
-    const pills = hotTopics.map(t =>
-      `<a href="/topic/${t.id}" class="topic-pill">
-        ${escapeHtml(t.title)} <span class="topic-pill-count">${t.article_count}건</span>
-      </a>`
-    ).join("");
+    const pills = hotTopics.map(t => {
+      const keywordHtml = t.keywords ? `<div class="topic-pill-keywords">${t.keywords.split(',').map(k => `#${k.trim()}`).join(' ')}</div>` : '';
+      return `<a href="/topic/${t.id}" class="topic-pill">
+        <div class="topic-pill-header">
+          ${escapeHtml(t.title)} <span class="topic-pill-count">${t.article_count}건</span>
+        </div>
+        ${keywordHtml}
+      </a>`;
+    }).join("");
 
     hotTopicsHtml = `
       <div class="hot-topics">
@@ -617,12 +702,19 @@ export function renderPage(
     `;
   }
 
+  const paginationHtml = (selectedKeywords.length > 0 && news.length >= 30) ? `
+    <div style="text-align: center; margin-top: 30px; margin-bottom: 10px;">
+      <a href="/?page=${page + 1}${kwParamStr}" class="filter-btn" style="padding: 10px 20px; font-size: 14px; text-decoration: none;">다음 페이지 더보기 &rarr;</a>
+    </div>
+  ` : '';
+
   const content = `
     ${hotTopicsHtml}
     ${filterHtml}
     <div class="news-columns">
       ${columnsHtml}
     </div>
+    ${paginationHtml}
   `;
 
   // Build the ItemList JSON-LD string
@@ -654,13 +746,18 @@ export function renderTopicPage(
   topicTitle: string,
   user: UserInfo | null = null
 ): string {
-  const itemsHtml = news.map(item => `
+  const itemsHtml = news.map(item => {
+    const keywordHtml = item.keywords ?
+      `<div class="news-item-tags">${item.keywords.split(',').map(k => `#${k.trim()}`).slice(0, 3).join(' ')}</div>` : '';
+
+    return `
     <li class="news-item" style="border-bottom: 1px dashed rgba(87,53,43,0.2); padding: 16px 0;">
       <div class="news-vote">
         <button class="vote-btn" hx-post="/vote/${item.id}" hx-target="#score-${item.id}" hx-swap="innerHTML">▲</button>
       </div>
       <div class="news-content">
         <a href="/go/${item.id}" class="news-title" style="font-size: 15px; margin-bottom: 4px;" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
+        ${keywordHtml}
         <div class="news-meta">
           <span class="meta-pill meta-points"><span id="score-${item.id}">${item.upvotes}</span> p</span>
           <span class="meta-pill meta-views">𓁹 ${item.view_count}</span>
@@ -670,7 +767,8 @@ export function renderTopicPage(
         ${item.description ? `<p style="font-size:12px; color:var(--secondary); margin-top:8px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.description)}</p>` : ''}
       </div>
     </li>
-  `).join("\n");
+  `;
+  }).join("\n");
 
   const content = `
     <div style="padding: 24px 20px; max-width: 800px; margin: 0 auto;">

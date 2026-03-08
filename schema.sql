@@ -66,6 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_clicks_news ON clicks(news_id);
 CREATE TABLE IF NOT EXISTS topics (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
+  keywords TEXT,  -- LLM generated tags
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   is_active INTEGER NOT NULL DEFAULT 1

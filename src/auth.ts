@@ -4,6 +4,7 @@ export interface Env {
     GOOGLE_CLIENT_SECRET: string;
     AI: any;
     VECTORIZE: any;
+    NEWS_PROCESSING_QUEUE: Queue<any>;
 }
 
 interface GoogleTokenResponse {
@@ -29,8 +30,16 @@ interface SessionUser {
 const OAUTH_REDIRECT_PATH = "/auth/callback";
 
 function getRedirectUri(request: Request): string {
-    const url = new URL(request.url);
-    return `${url.origin}${OAUTH_REDIRECT_PATH}`;
+    // Cloudflare Workers dev environment sometimes rewrites request.url and Host to the remote workers.dev domain.
+    // However, it preserves the authentic local browser URL in the 'mf-original-url' header.
+    const originalUrlHeader = request.headers.get("mf-original-url");
+    let origin = new URL(request.url).origin;
+
+    if (originalUrlHeader) {
+        origin = new URL(originalUrlHeader).origin;
+    }
+
+    return `${origin}${OAUTH_REDIRECT_PATH}`;
 }
 
 function generateToken(): string {

@@ -41,7 +41,7 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
 
         // Search Vectorize
         const searchRes = await env.VECTORIZE.query(vector, { topK: 3 });
-        const matches = searchRes.matches.filter((m: any) => m.score > 0.45);
+        const matches = searchRes.matches.filter((m: any) => m.score > 0.65);
 
         if (matches.length > 0) {
             // Map to existing topics

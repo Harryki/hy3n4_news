@@ -149,7 +149,7 @@ export function renderPage(
             itemsBySource[sourceName].push(item);
         }
     });
-
+    // console.log(itemsBySource)
     const sources = Object.keys(itemsBySource).sort();
     let colsHtml = "";
     sources.forEach((sourceName) => {
@@ -204,20 +204,24 @@ uiRouter.get("/", async (request, env) => {
         SELECT 
             n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
             s.name as source_name,
-            -- This now only runs for the LIMIT amount (e.g., 20 times), not 12,000 times
             (SELECT group_concat(t.keywords) 
             FROM news_topics nt 
             JOIN topics t ON nt.topic_id = t.id 
             WHERE nt.news_id = n.id) as keywords
         FROM (
+            -- 1. 먼저 중복 없는 뉴스 ID 125개만 정확히 뽑습니다.
             SELECT id, source_id
             FROM news
             WHERE published_at >= ?
             ORDER BY created_at DESC
-            LIMIT 200
+            LIMIT 125
         ) AS limited_news
         JOIN news n ON n.id = limited_news.id
-        JOIN sources s ON n.source_id = limited_news.source_id;
+        -- 2. 소스 테이블과 조인하되, 뉴스 하나당 소스가 하나라고 보장된다면 그대로 두고
+        -- 만약 소스가 여러 개라면 여기서 중복이 생기므로 주의해야 합니다.
+        JOIN sources s ON n.source_id = s.id
+        -- 3. 혹시 모를 내부 중복을 방지하기 위해 정렬을 다시 맞춥니다.
+        ORDER BY n.created_at DESC;
     `;
 
     let queryParams: any[] = [cutoffISO];
@@ -231,17 +235,22 @@ uiRouter.get("/", async (request, env) => {
             SELECT 
                 n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
                 s.name AS source_name,
+                -- 최종 출력할 30개에 대해서만 키워드 문자열 합치기 수행
                 (SELECT group_concat(t2.keywords) 
                 FROM news_topics nt2 
                 JOIN topics t2 ON nt2.topic_id = t2.id 
                 WHERE nt2.news_id = n.id) AS keywords
             FROM (
-                -- Step 1: Find ONLY the IDs of the 30 rows we actually need
-                SELECT DISTINCT n.id, COALESCE(n.published_at, n.created_at) as sort_date
+                -- [핵심 수정] 서브쿼리에서는 '뉴스 ID'만 고유하게 30개 뽑습니다.
+                SELECT n.id, COALESCE(n.published_at, n.created_at) as sort_date
                 FROM news n
-                JOIN news_topics nt ON n.id = nt.news_id
-                JOIN topics t ON nt.topic_id = t.id
-                WHERE (${likeConditions})
+                WHERE n.id IN (
+                    -- 키워드 조건을 만족하는 뉴스 ID들만 먼저 필터링
+                    SELECT DISTINCT nt.news_id
+                    FROM news_topics nt
+                    JOIN topics t ON nt.topic_id = t.id
+                    WHERE (${likeConditions})
+                )
                 ORDER BY sort_date DESC
                 LIMIT 30 OFFSET ?
             ) AS filtered
@@ -302,7 +311,7 @@ uiRouter.get("/", async (request, env) => {
         const dateB = new Date(b.published_at || b.created_at).getTime();
         return dateB - dateA;
     });
-
+    // console.log(ranked)
     const html = renderPage(ranked, user, "", limit, timeHours, hotTopics, hotKeywords, selectedKeywords, page);
 
     const response = new Response(html, {

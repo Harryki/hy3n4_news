@@ -167,14 +167,38 @@ export async function performRSSFetch(env: Env): Promise<void> {
 
     // 3. 모든 피드 순회가 끝난 후, 모아진 ID가 있다면 한 번에 큐 처리
     if (allNewIds.length > 0 && env.NEWS_PROCESSING_QUEUE) {
-        const messages = allNewIds.map(id => ({ body: { news_id: id } }));
+        type QueueMessage = { body: { news_id: number } };
+
+        const messages: QueueMessage[] = allNewIds.map(id => ({ body: { news_id: id } }));
         const BATCH_LIMIT = 100;
+        const DELAY_MS = 200; // 각 배치 사이의 간격 (0.2초)
 
         for (let i = 0; i < messages.length; i += BATCH_LIMIT) {
             const chunk = messages.slice(i, i + BATCH_LIMIT);
-            await env.NEWS_PROCESSING_QUEUE.sendBatch(chunk);
+
+            // 재시도 로직을 포함한 전송 함수
+            const sendWithRetry = async (data: QueueMessage[], attempt: number = 1): Promise<void> => {
+                try {
+                    await env.NEWS_PROCESSING_QUEUE.sendBatch(data);
+                } catch (error: any) {
+                    if (error.message.includes("Too Many Requests") && attempt <= 3) {
+                        console.warn(`[QUEUE] Rate limited. Retrying attempt ${attempt}...`);
+                        await new Promise(res => setTimeout(res, 1000 * attempt)); // 1초, 2초... 점진적 대기
+                        return sendWithRetry(data, attempt + 1);
+                    }
+                    throw error;
+                }
+            };
+
+            await sendWithRetry(chunk);
+
+            // 마지막 배치가 아니라면 DELAY_MS 만큼 대기
+            if (i + BATCH_LIMIT < messages.length) {
+                await new Promise(res => setTimeout(res, DELAY_MS));
+            }
         }
-        console.log(`[QUEUE] Total ${allNewIds.length} new articles pushed to queue in ${Math.ceil(allNewIds.length / BATCH_LIMIT)} batches.`);
+
+        console.log(`[QUEUE] Total ${allNewIds.length} new articles pushed in ${Math.ceil(allNewIds.length / BATCH_LIMIT)} batches.`);
     }
 
     console.log(`[CRON] RSS Summary: ${totalInserted} inserted | ${totalSkipped} skipped | ${totalErrors} errors`);

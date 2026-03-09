@@ -102,40 +102,58 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
             console.log(`[QUEUE] Found ${topicsToSummarize.length} topics to summarize.`);
 
             for (const topic of topicsToSummarize) {
-                const prompt = `You are a professional Korean news editor. Read the following news article titles and provide a concise, unified topic title (under 20 Korean characters) and exactly 3 highly relevant keywords.
-    
+                try {
+                    const aiResponse = await env.AI.run("@cf/google/gemma-3-12b-it", {
+                        messages: [
+                            {
+                                role: "system",
+                                content: "You are a professional Korean news editor. You must respond ONLY with a JSON object."
+                            },
+                            {
+                                role: "user",
+                                content: `Read the following news titles and provide a unified title (under 20 Korean chars) and 3 keywords.
+
 News titles:
 ${topic.titles}
-
-Respond STRICTLY in this JSON format without any markdown blocks or extra conversational text:
+    
+Output format:
 {
-  "title": "단일화된 사건 제목",
-  "keywords": "키워드1, 키워드2, 키워드3"
-}`;
-
-                try {
-                    const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-                        prompt: prompt,
-                        max_tokens: 256
+"title": "...",
+"keywords": "..."
+}`
+                            }
+                        ],
+                        max_tokens: 512
                     }) as { response: string };
 
-                    if (aiResponse && aiResponse.response) {
+                    if (aiResponse?.response) {
                         try {
-                            const match = aiResponse.response.match(/\{[\s\S]*\}/);
-                            if (match) {
-                                const parsed = JSON.parse(match[0]);
+                            const rawContent = aiResponse.response.trim();
+                            const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+
+                            if (jsonMatch) {
+                                const parsed = JSON.parse(jsonMatch[0]);
+
                                 if (parsed.title && parsed.keywords) {
+                                    const keywordString = Array.isArray(parsed.keywords)
+                                        ? parsed.keywords.join(", ")
+                                        : parsed.keywords;
+
                                     await env.DB.prepare("UPDATE topics SET title = ?, keywords = ? WHERE id = ?")
-                                        .bind(parsed.title, parsed.keywords, topic.id).run();
+                                        .bind(parsed.title, keywordString, topic.id).run();
+
                                     console.log(`[QUEUE] Topic ${topic.id} summarized: ${parsed.title}`);
                                 }
+                            } else {
+                                throw new Error("No JSON object found in response");
                             }
-                        } catch (e) {
-                            console.error(`[QUEUE] JSON Parse failed for topic ${topic.id}`);
+                        } catch (e: any) {
+                            console.error(`[QUEUE] Parse failed for topic ${topic.id}:`, e.message);
+                            console.error(`[DEBUG] Raw AI output was: ${aiResponse.response}`);
                         }
                     }
                 } catch (e: any) {
-                    console.error(`[QUEUE] Summarization failed for topic ${topic.id}:`, e.message);
+                    console.error(`[QUEUE] AI Error for topic ${topic.id}:`, e.message);
                 }
             }
         }

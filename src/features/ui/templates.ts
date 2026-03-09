@@ -140,9 +140,17 @@ export const CSS_STYLES = `
       color: var(--bg);
     }
 
+    .app-container {
+      max-width: 1420px;
+      margin: 0 auto;
+      padding: 0 20px;
+      box-sizing: border-box;
+    }
+
     .news-columns {
       display: flex;
       flex-wrap: wrap;
+      justify-content: center;
       gap: 20px;
       padding: 20px 0px;
     }
@@ -191,6 +199,13 @@ export const CSS_STYLES = `
       background: rgba(229, 166, 87, 0.25);
       border-color: var(--accent);
     }
+
+    @media (max-width: 640px) {
+      .topic-pill {
+        width: 100%;
+        box-sizing: border-box;
+      }
+    }
     
     .topic-pill-header {
       display: flex;
@@ -212,6 +227,7 @@ export const CSS_STYLES = `
     .news-column {
       flex: 1 1 calc(50% - 10px);
       min-width: 300px;
+      max-width: 700px;
     }
 
     .column-header {
@@ -487,7 +503,7 @@ export function renderHTML(content: string, user: string | null = null, currentL
       if (e.detail.xhr.status === 401) { window.location.href = '/login'; }
     });
   </script>
-  
+  <div class="app-container">
     <header>
       <h1><a href="/" style="color: var(--bg); text-decoration: none;">하이에나뉴스</a></h1>
       <nav>
@@ -495,13 +511,13 @@ export function renderHTML(content: string, user: string | null = null, currentL
       </nav>
       ${authHtml}
     </header>
-  <main>
-    ${content}
-  </main>
-  
+    <main>
+      ${content}
+    </main>
     <footer>
       <a href="/guidelines">가이드라인 (Guidelines)</a> | <a href="/legal">법적고지 (Legal)</a> | <a href="mailto:hy3n4news@gmail.com">Contact</a>
     </footer>
+  </div>
 </body>
 </html>`;
 }

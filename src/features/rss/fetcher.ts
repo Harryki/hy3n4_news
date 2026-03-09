@@ -121,6 +121,8 @@ export async function performRSSFetch(env: Env): Promise<void> {
     let totalSkipped = 0;
     let totalErrors = 0;
 
+    const allNewIds: number[] = [];
+
     for (const result of feedResults) {
         if (result.status === "rejected") {
             console.error(`[ERROR] Feed fetch failed: ${result.reason}`);
@@ -143,35 +145,36 @@ export async function performRSSFetch(env: Env): Promise<void> {
 
             const batchResults = await env.DB.batch<{ id: number }>(statements);
 
-            const newIds: number[] = [];
+            let insertedCount = 0;
             for (const res of batchResults) {
                 if (res.results && res.results.length > 0) {
-                    newIds.push(res.results[0].id);
+                    // 2. 여기서 전역 배열에 ID를 모아줍니다.
+                    allNewIds.push(res.results[0].id);
+                    insertedCount++;
                 }
             }
 
-            const inserted = newIds.length;
-            const skipped = items.length - inserted;
-
-            totalInserted += inserted;
+            const skipped = items.length - insertedCount;
+            totalInserted += insertedCount;
             totalSkipped += skipped;
 
-            if (inserted > 0 && env.NEWS_PROCESSING_QUEUE) {
-                const messages = newIds.map(id => ({ body: { news_id: id } }));
-
-                const BATCH_LIMIT = 100;
-                for (let i = 0; i < messages.length; i += BATCH_LIMIT) {
-                    const chunk = messages.slice(i, i + BATCH_LIMIT);
-                    await env.NEWS_PROCESSING_QUEUE.sendBatch(chunk);
-                }
-                console.log(`[QUEUE] Pushed ${inserted} new articles to processing queue.`);
-            }
-
-            console.log(`[RESULT] ${source.name}: +${inserted} new | ${skipped} duplicates | 0 errors (of ${items.length} total)`);
+            console.log(`[RESULT] ${source.name}: +${insertedCount} new | ${skipped} duplicates | ${items.length} total`);
         } catch (err) {
             totalErrors += items.length;
             console.error(`[DB ERROR] Batch insert failed for ${source.name}:`, err);
         }
+    }
+
+    // 3. 모든 피드 순회가 끝난 후, 모아진 ID가 있다면 한 번에 큐 처리
+    if (allNewIds.length > 0 && env.NEWS_PROCESSING_QUEUE) {
+        const messages = allNewIds.map(id => ({ body: { news_id: id } }));
+        const BATCH_LIMIT = 100;
+
+        for (let i = 0; i < messages.length; i += BATCH_LIMIT) {
+            const chunk = messages.slice(i, i + BATCH_LIMIT);
+            await env.NEWS_PROCESSING_QUEUE.sendBatch(chunk);
+        }
+        console.log(`[QUEUE] Total ${allNewIds.length} new articles pushed to queue in ${Math.ceil(allNewIds.length / BATCH_LIMIT)} batches.`);
     }
 
     console.log(`[CRON] RSS Summary: ${totalInserted} inserted | ${totalSkipped} skipped | ${totalErrors} errors`);

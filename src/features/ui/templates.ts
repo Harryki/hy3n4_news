@@ -1,412 +1,420 @@
 export const CSS_STYLES = `
-  :root {
-    --bg: #FFFFFF;
-    --text: #333333;
-    --accent: #E5A657; /* 하이에나 뉴스 메인 색상 */
-    --secondary: #57352B; /* 짙은 브라운 색상 */
-    --border: #F0F0F0;
-  }
-  
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Pretendard";
-    background-color: var(--bg);
-    color: var(--text);
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-  }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  header {
-    background-color: var(--accent);
-    color: var(--bg);
-    padding: 12px 20px;
-    display: flex;
-    align-items: center;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  }
+    :root {
+      --text: #2b2b2b;
+      --bg: #f9e9da;
+      --secondary: #4c393d;
+      --border: #57352b;
+      --accent: #e5a657;
+    }
 
-  header h1 {
-    font-size: 18px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    margin-right: 20px;
-  }
+    body {
+      font-family: 'MaruBuri', 'Nanum Myeongjo', serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 100%;
+      margin: 0;
+      padding: 0;
+      line-height: 1.4;
+    }
 
-  header nav {
-    display: flex;
-    gap: 15px;
-  }
+    header {
+      font-family: 'Pretendard', sans-serif;
+      background: var(--border);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 3px solid var(--accent);
+    }
 
-  header nav a {
-    color: var(--bg);
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-    opacity: 0.9;
-  }
+    header h1 {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--bg);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
 
-  header nav a:hover {
-    text-decoration: underline;
-  }
+    header nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: bold;
+    }
 
-  .auth-area {
-    margin-left: auto;
-    font-size: 12px;
-    color: var(--bg);
-  }
+    header nav a:hover {
+      text-decoration: underline;
+    }
 
-  .auth-area a {
-    color: var(--accent);
-    text-decoration: none;
-    font-weight: bold;
-  }
+    .auth-area {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--bg);
+    }
 
-  .auth-area a:hover {
-    text-decoration: underline;
-  }
+    .auth-area a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: bold;
+    }
 
-  .user-name {
-    color: var(--accent);
-  }
+    .auth-area a:hover {
+      text-decoration: underline;
+    }
 
-  .filters {
-    display: flex;
-    flex-wrap: wrap;
-    padding: 15px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    background: var(--bg);
-    border-bottom: 1px solid rgba(0,0,0,0.05);
-  }
+    .user-name {
+      color: var(--accent);
+    }
 
-  .filter-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      padding: 15px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      background: var(--bg);
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
 
-  .filter-label {
-    font-size: 11px;
-    font-weight: bold;
-    color: #888;
-    letter-spacing: 0.5px;
-    min-width: 45px;
-  }
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
 
-  .filter-btn {
-    text-decoration: none;
-    color: var(--secondary);
-    font-size: 13px;
-    font-weight: 500;
-    padding: 4px 12px;
-    border-radius: 12px;
-    background: rgba(0,0,0,0.05);
-    transition: all 0.2s;
-  }
+    .filter-label {
+      font-size: 11px;
+      font-weight: bold;
+      color: #888;
+      letter-spacing: 0.5px;
+      min-width: 45px;
+    }
 
-  .filter-btn:hover {
-    background: rgba(0,0,0,0.1);
-  }
+    .filter-btn {
+      text-decoration: none;
+      color: var(--secondary);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 4px 12px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.05);
+      transition: all 0.2s;
+    }
 
-  .filter-btn.active {
-    background: var(--secondary);
-    color: var(--bg);
-  }
+    .filter-btn:hover {
+      background: rgba(0,0,0,0.1);
+    }
 
-  .tags-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+    .filter-btn.active {
+      background: var(--secondary);
+      color: var(--bg);
+    }
 
-  .filter-tag {
-    text-decoration: none;
-    color: var(--secondary);
-    background: rgba(229, 166, 87, 0.15);
-    padding: 6px 12px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: bold;
-    transition: all 0.2s;
-  }
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
 
-  .filter-tag:hover {
-    background: rgba(229, 166, 87, 0.3);
-  }
+    .filter-tag {
+      text-decoration: none;
+      color: var(--secondary);
+      background: rgba(229, 166, 87, 0.15);
+      padding: 6px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
 
-  .filter-tag.active {
-    background: var(--accent);
-    color: var(--bg);
-  }
+    .filter-tag:hover {
+      background: rgba(229, 166, 87, 0.3);
+    }
 
-  .news-columns {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    padding: 0 20px 20px;
-  }
+    .filter-tag.active {
+      background: var(--accent);
+      color: var(--bg);
+    }
 
-  @media (max-width: 640px) {
-    .news-columns { padding: 0 0 8px; gap: 12px; }
-  }
+    .news-columns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding: 20px 0px;
+    }
 
-  .hot-topics {
-    padding: 20px 20px 10px;
-    background: var(--bg);
-  }
-  
-  .hot-topics-header {
-    font-size: 15px;
-    font-weight: bold;
-    color: #d94126;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+    @media (max-width: 640px) {
+      .news-columns { padding: 0 0 8px; gap: 12px; }
+    }
 
-  .topic-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+    .hot-topics {
+      padding: 20px 20px 10px;
+      background: var(--bg);
+    }
+    
+    .hot-topics-header {
+      font-size: 15px;
+      font-weight: bold;
+      color: #d94126;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
-  .topic-pill {
-    text-decoration: none;
-    background: rgba(229, 166, 87, 0.15);
-    color: var(--secondary);
-    padding: 10px 14px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: bold;
-    border: 1px solid rgba(229, 166, 87, 0.4);
-    transition: all 0.2s ease;
-    display: inline-flex;
-    flex-direction: column;
-    gap: 5px;
-  }
+    .topic-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
 
-  .topic-pill:hover {
-    background: rgba(229, 166, 87, 0.25);
-    border-color: var(--accent);
-  }
-  
-  .topic-pill-header {
-    display: flex;
-    align-items: center;
-  }
+    .topic-pill {
+      text-decoration: none;
+      background: rgba(229, 166, 87, 0.15);
+      color: var(--secondary);
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: bold;
+      border: 1px solid rgba(229, 166, 87, 0.4);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      flex-direction: column;
+      gap: 5px;
+    }
 
-  .topic-pill-count {
-    opacity: 0.7;
-    font-size: 11px;
-    margin-left: 6px;
-  }
-  
-  .topic-pill-keywords {
-    font-size: 11px;
-    color: #828282;
-    font-weight: normal;
-  }
+    .topic-pill:hover {
+      background: rgba(229, 166, 87, 0.25);
+      border-color: var(--accent);
+    }
+    
+    .topic-pill-header {
+      display: flex;
+      align-items: center;
+    }
 
-  .news-column {
-    flex: 1 1 calc(33.333% - 14px);
-    min-width: 300px;
-  }
+    .topic-pill-count {
+      opacity: 0.7;
+      font-size: 11px;
+      margin-left: 6px;
+    }
+    
+    .topic-pill-keywords {
+      font-size: 11px;
+      color: #828282;
+      font-weight: normal;
+    }
 
-  .column-header {
-    font-size: 16px;
-    font-weight: bold;
-    color: var(--secondary);
-    border-bottom: 2px solid var(--border);
-    padding-bottom: 8px;
-    margin-bottom: 12px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
+    .news-column {
+      flex: 1 1 calc(50% - 10px);
+      min-width: 300px;
+    }
 
-  .news-list {
-    list-style: none;
-    padding: 0;
-  }
+    .column-header {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--secondary);
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
 
-  .news-item {
-    display: flex;
-    align-items: baseline;
-    padding: 6px 0;
-    border-bottom: 1px dashed rgba(87, 53, 43, 0.3);
-    gap: 6px;
-  }
+    .news-list {
+      list-style: none;
+      padding: 0;
+    }
 
-  .news-item:hover {
-    background: rgba(87, 53, 43, 0.06);
-  }
+    .news-item {
+      display: flex;
+      align-items: baseline;
+      padding: 12px 0;
+      border-bottom: 1px dashed rgba(87, 53, 43, 0.3);
+      gap: 6px;
+    }
 
-  .news-rank {
-    color: var(--secondary);
-    font-size: 13px;
-    min-width: 24px;
-    text-align: right;
-    flex-shrink: 0;
-  }
+    .news-item:hover {
+      background: rgba(87, 53, 43, 0.06);
+    }
 
-  .news-vote {
-    flex-shrink: 0;
-  }
+    .news-rank {
+      color: var(--secondary);
+      font-size: 13px;
+      min-width: 24px;
+      text-align: right;
+      flex-shrink: 0;
+    }
 
-  .vote-btn {
-    background: none;
-    border: none;
-    color: var(--accent);
-    cursor: pointer;
-    font-size: 14px;
-    padding: 8px;
-    min-width: 44px;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-  }
+    .news-vote {
+      flex-shrink: 0;
+    }
 
-  .vote-btn:hover {
-    color: var(--text);
-  }
+    .vote-btn {
+      background: none;
+      border: none;
+      color: var(--accent);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 8px;
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
 
-  .news-content {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    height: 100%;
-  }
+    .vote-btn:hover {
+      color: var(--text);
+    }
 
-  .news-title {
-    color: var(--text);
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: bold;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
-  }
+    .news-content {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      height: 100%;
+    }
 
-  .news-title:visited {
-    color: var(--secondary);
-  }
+    .news-title {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: bold;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
+    }
 
-  .news-title:hover {
-    text-decoration: underline;
-  }
+    .news-title:visited {
+      color: var(--secondary);
+    }
 
-  .news-domain {
-    color: var(--secondary);
-    font-size: 11px;
-  }
+    .news-title:hover {
+      text-decoration: underline;
+    }
 
-  .news-item-meta {
-    font-size: 11px;
-    color: #828282;
-    margin-top: 6px;
-  }
-  
-  .news-item-tags {
-    font-size: 11px;
-    color: var(--accent);
-    margin-top: 4px;
-    font-weight: 500;
-  }
-  .news-meta {
-    display: flex;
-    gap: 6px;
-    margin-top: 4px;
-    flex-wrap: wrap;
-  }
+    .news-domain {
+      color: var(--secondary);
+      font-size: 11px;
+    }
 
-  .meta-pill {
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-weight: bold;
-    letter-spacing: 0.3px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  }
+    .news-item-meta {
+      font-size: 11px;
+      color: #828282;
+      margin-top: 6px;
+    }
+    
+    .news-item-tags {
+      font-size: 11px;
+      color: var(--border);
+      margin: 0;
+      font-weight: 700;
+    }
+    .news-meta {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
 
-  .meta-points {
-    color: var(--accent);
-    background: rgba(229, 166, 87, 0.12);
-    border: 1px solid rgba(229, 166, 87, 0.2);
-  }
+    .meta-pill {
+      font-size: 10px;
+      padding: 0 6px;
+      border-radius: 3px;
+      font-weight: bold;
+      letter-spacing: 0.3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 20px;
+      box-sizing: border-box;
+      line-height: 1;
+    }
 
-  .meta-views {
-    color: var(--secondary);
-    background: rgba(76, 57, 61, 0.2);
-  }
+    .meta-points {
+      color: var(--accent);
+      background: rgba(229, 166, 87, 0.12);
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    
+    .meta-points:hover {
+      background: rgba(229, 166, 87, 0.25);
+    }
 
-  .meta-time {
-    color: var(--secondary);
-    background: none;
-  }
+    .meta-views {
+      color: var(--secondary);
+      background: rgba(76, 57, 61, 0.2);
+    }
 
-  footer {
-    text-align: center;
-    padding: 16px;
-    font-size: 11px;
-    color: var(--secondary);
-    border-top: 2px solid var(--border);
-    margin-top: 40px;
-  }
+    .meta-time {
+      color: var(--secondary);
+      background: none;
+    }
 
-  footer a {
-    color: var(--secondary);
-    text-decoration: none;
-  }
+    footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 11px;
+      color: var(--secondary);
+      border-top: 2px solid var(--border);
+      margin-top: 40px;
+    }
 
-  footer a:hover {
-    text-decoration: underline;
-  }
+    footer a {
+      color: var(--secondary);
+      text-decoration: none;
+    }
 
-  .static-content {
-    padding: 30px 20px;
-    max-width: 800px;
-    margin: 0 auto;
-    line-height: 1.6;
-  }
+    footer a:hover {
+      text-decoration: underline;
+    }
 
-  .static-content h2 {
-    color: var(--secondary);
-    margin-bottom: 20px;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--accent);
-    font-family: 'Pretendard', sans-serif;
-  }
+    .static-content {
+      padding: 30px 20px;
+      max-width: 800px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
 
-  .static-content h3 {
-    color: var(--text);
-    margin-top: 24px;
-    margin-bottom: 12px;
-    font-family: 'Pretendard', sans-serif;
-  }
+    .static-content h2 {
+      color: var(--secondary);
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent);
+      font-family: 'Pretendard', sans-serif;
+    }
 
-  .static-content p, .static-content ul {
-    margin-bottom: 16px;
-  }
+    .static-content h3 {
+      color: var(--text);
+      margin-top: 24px;
+      margin-bottom: 12px;
+      font-family: 'Pretendard', sans-serif;
+    }
 
-  .static-content li {
-    margin-bottom: 8px;
-    margin-left: 20px;
-  }
-`;
+    .static-content p, .static-content ul {
+      margin-bottom: 16px;
+    }
+
+    .static-content li {
+      margin-bottom: 8px;
+      margin-left: 20px;
+    }
+  `;
 
 export function renderHTML(content: string, user: string | null = null, currentLimit: number = 25, currentTime: number = 24, activeKeyword: string = '') {
   const authHtml = user
-    ? `<div class="auth-area"><span class="user-name">${user}</span> | <a href="/logout">logout</a></div>`
+    ? `<div class="auth-area"><a href="/user" class="user-name">${user}</a> | <a href="/logout">로그아웃</a></div>`
     : `<div class="auth-area"><a href="/login">login</a></div>`;
 
   const limits = [5, 10, 15, 25];
@@ -498,35 +506,46 @@ export function renderHTML(content: string, user: string | null = null, currentL
 </html>`;
 }
 
+export function getRelativeTime(publishedAt: string, createdAt: string): string {
+  const targetDate = new Date(publishedAt || createdAt).getTime();
+  const timeDiffMs = new Date().getTime() - targetDate;
+  const timeAgoMins = Math.floor(timeDiffMs / 60000);
+
+  if (timeAgoMins < 5) return '방금 전';
+  if (timeAgoMins < 60) return `${timeAgoMins}분 전`;
+
+  const timeAgoHours = Math.floor(timeAgoMins / 60);
+  if (timeAgoHours < 24) return `${timeAgoHours}시간 전`;
+
+  return `${Math.floor(timeAgoHours / 24)}일 전`;
+}
+
 export function renderNewsList(sourceName: string, news: any[]) {
   let html = `<div class="news-column">
       <div class="column-header">${sourceName}</div>
       <ul class="news-list">`;
 
   news.forEach((item, index) => {
-    const domain = new URL(item.url).hostname.replace('www.', '');
-    const timeAgo = Math.floor((new Date().getTime() - new Date(item.created_at).getTime()) / 3600000);
-    let timeStr = timeAgo < 1 ? 'Just now' : `${timeAgo}h ago`;
-
-    let tagsHtml = '';
-    if (item.topic_title) {
-      tagsHtml = `<div class="news-item-tags">관련 토픽: ${item.topic_title}</div>`;
+    let keywordHtml = '';
+    if (item.keywords && typeof item.keywords === 'string') {
+      const uniqueKeywords = Array.from(new Set(item.keywords.split(',').map((k: string) => k.trim()).filter((k: string) => k !== '')));
+      keywordHtml = `<div class="news-item-tags">${uniqueKeywords.slice(0, 3).map(k => `#${k}`).join(' ')}</div>`;
     }
+
+    const domain = new URL(item.url).hostname.replace('www.', '');
+    const timeStr = getRelativeTime(item.published_at, item.created_at);
 
     html += `
         <li class="news-item">
-          <div class="news-vote">
-            <button class="vote-btn" title="Upvote" hx-post="/vote/${item.id}?action=up" hx-swap="none">▲</button>
-          </div>
           <div class="news-content">
             <a href="/go/${item.id}" target="_blank" class="news-title">${item.title}</a>
             <div class="news-meta">
-              <span class="meta-pill meta-points" id="score-${item.id}">${item.upvotes || 0} pts</span>
+              <button class="meta-pill meta-points" title="Toggle Upvote" hx-post="/vote/${item.id}" hx-target="#score-${item.id}" hx-swap="innerHTML"><span id="score-${item.id}">${item.upvotes || 0}</span> pts</button>
               ${item.view_count !== undefined ? `<span class="meta-pill meta-views">${item.view_count || 0} views</span>` : ''}
               <span class="meta-pill meta-time">${timeStr}</span>
               <span class="news-domain">(${domain})</span>
+              ${keywordHtml}
             </div>
-            ${tagsHtml}
           </div>
         </li>`;
   });
@@ -539,13 +558,13 @@ export function renderTopics(topics: any[], currentLimit: number = 25, currentTi
   if (!topics || topics.length === 0) return '';
 
   let html = `<div class="hot-topics">
-      <div class="hot-topics-header">🔥 실시간 핫 토픽</div>
+      <div class="hot-topics-header">뜨거운 감자</div>
       <div class="topic-pills">`;
 
   topics.forEach((t) => {
     const badge = `<span class="topic-pill-count">[기사 ${t.article_count}개]</span>`;
     html += `
-          <a href="/?limit=${currentLimit}&time=${currentTime}&topic=${t.id}" class="topic-pill">
+          <a href="/topic/${t.id}" class="topic-pill">
             <div class="topic-pill-header">${t.title} ${badge}</div>
             ${t.keywords ? `<div class="topic-pill-keywords">#${t.keywords.split(',').join(' #')}</div>` : ''}
           </a>
@@ -555,3 +574,38 @@ export function renderTopics(topics: any[], currentLimit: number = 25, currentTi
   html += `</div></div>`;
   return html;
 }
+
+export function renderWideNewsList(news: any[]) {
+  let html = `<div style="padding: 0 20px; max-width: 800px; margin: 0 auto; padding-bottom: 24px;">
+      <ul class="news-list" style="list-style: none; padding: 0;">`;
+
+  news.forEach((item) => {
+    let keywordHtml = '';
+    if (item.keywords && typeof item.keywords === 'string') {
+      const uniqueKeywords = Array.from(new Set(item.keywords.split(',').map((k: string) => k.trim()).filter((k: string) => k !== '')));
+      keywordHtml = `<div class="news-item-tags">${uniqueKeywords.slice(0, 3).map(k => `#${k}`).join(' ')}</div>`;
+    }
+
+    const domain = new URL(item.url).hostname.replace('www.', '');
+    const timeStr = getRelativeTime(item.published_at, item.created_at);
+
+    html += `
+        <li class="news-item" style="border-bottom: 1px dashed rgba(87,53,43,0.2); padding: 16px 0;">
+          <div class="news-content">
+            <a href="/go/${item.id}" target="_blank" class="news-title" style="font-size: 15px; margin-bottom: 4px;">${item.title}</a>
+            <div class="news-meta">
+              ${keywordHtml}
+              <button class="meta-pill meta-points" title="Toggle Upvote" hx-post="/vote/${item.id}" hx-target="#score-${item.id}" hx-swap="innerHTML"><span id="score-${item.id}">${item.upvotes || 0}</span> pts</button>
+              ${item.view_count !== undefined ? `<span class="meta-pill meta-views">${item.view_count || 0} views</span>` : ''}
+              <span class="meta-pill" style="background:rgba(87,53,43,0.1); color:var(--secondary);">${item.source_name}</span>
+              <span class="meta-pill meta-time">${timeStr}</span>
+            </div>
+            ${item.description ? `<p style="font-size:12px; color:var(--secondary); margin-top:8px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${item.description}</p>` : ''}
+          </div>
+        </li>`;
+  });
+
+  html += `</ul></div>`;
+  return html;
+}
+

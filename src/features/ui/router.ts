@@ -1,6 +1,6 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
-import { renderHTML, renderNewsList, renderTopics } from "./templates";
+import { renderHTML, renderNewsList, renderTopics, renderWideNewsList } from "./templates";
 
 export const uiRouter = new Router();
 
@@ -31,6 +31,36 @@ export function renderNotFoundPage(user: { username: string } | null = null): st
         <div style="text-align: center; margin-top: 40px;">
             <h2>404 - Page Not Found</h2>
             <p>길을 잃으셨나요? 홈으로 돌아가세요!</p>
+            <pre style="margin-top: 20px; padding: 20px; font-family: monospace; color: var(--border); font-size: 8px; text-align: center; display: inline-block; background: rgba(87, 53, 43, 0.05); border-radius: 8px; line-height: 1.2;">
+                                       ░░                                       
+                                     ░▓▓▓▓▓      ▒▒                             
+                                   ▒▓▓▓▓▓▒▒░    ▓▓▒                             
+                                  ░▓▓▓▓▓▓▓▓▓  ░▓▓▓▒                             
+                             ░▓░ ░▓▓▓▓▓▓▓▓▒▓▓░░░▒▓▒                             
+                           ▓▓▓▓  ▓▓▓▓▓▓▓▓▓▓▓▓░░░░░▒▒                            
+                        ▒▓▓▓▓▒  ▒▓▓▓▓▓▓▒▒▓▒░░░░░░░░░░▒                          
+                     ░▓▓▓▓▓▓     ▓▓▓▓▓▓▓░░░░░░░░░░░░░░░▓                        
+                   ▓▓▓▓▓▓▓▓  ░░  ▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░▓                      
+                ▒▓▓▓▓▓▓▓▓▒  ░░░    ▓▓▓░░░░░░░░░░░░░░░░░░░░▒░                    
+              ▓▓▓▓▓▓▓▓▓▓   ░░░░░░░    ░░░░░░░░░░░▒▓▒  ▓▓▓▒▒▓                    
+             ▒▓▓▓▓▓▓▓▓▓   ░░░░░░░░░░░░░░░░░░░░░░░░▓▒  ▓▓▓▓▓▓▓░                  
+            ░▓▓▓▓▓▓▓▓▒  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒░░░░▓▓▓▓▓▓▒                
+            ▒▓▓▓▓▓▓▓▓   ░░░░░░░░░░░░▒░░░░░░░░░░░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▒             
+           ░▓▓▓▓▓▓▓▓▓▒  ░░░░░░░░░░░░▓░░░░░░░░░░░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▒           
+           ▓▓▓▓▓▓▓▓▓▓▓▒  ░░░░░░░░░░░▒▓░░░░░░░░░░░░░▓▒░░░▓▓▓▓▓▓▓▓▓▓▓▓            
+          ░▓▓▓▓▓▓▓▓▓▓▓▓  ░░░░░░░░░░░░▒▓▓░░░░░░░░░▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓             
+          ▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ░░░░░░░░░░░░░▓▓▓▓▓▒░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░              
+          ▓▓▓▓▓▓▓▓▓▓▓▓▓▓   ░░░░░░░░░░░░▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                
+         ░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ░░░░░░░░░░▓▓▓▓▓▓▓▓▓░                                 
+           ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒  ░░░░░░░▓▓▓▓▓▓▓▓▓▓                                   
+            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ░░░░░▓▓▓▓▓▓▓▓▓▓▓                                    
+             ▓▓▓▓▓▓▓▓▓▓▓▓▓▓  ░░▓▓▓▓▓▓▓▓▓▓▓▓                                     
+              ▓▓▓▓▓▓▓▓▓▓▓▓▓▒ ▓▓▓▓▓▓▓▓▓▓▓▓▓                                      
+               ░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                      
+                 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                                       
+                  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                                      
+                   ▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                                      
+            </pre>
             <p><a href="/" style="color: var(--accent); font-weight: bold; text-decoration: none; margin-top: 20px; display: inline-block;">&larr; 홈으로 돌아가기</a></p>
         </div>
     `;
@@ -60,8 +90,8 @@ export function renderPage(
     let content = "";
 
     if (topicName) {
-        content += `<h2 style="padding: 20px; color: var(--secondary)">Topic: ${topicName}</h2>`;
-        content += renderNewsList("Articles", news);
+        content += `<h2 style="padding: 20px; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}</h2>`;
+        content += renderWideNewsList(news);
         return renderHTML(content, user?.username, currentLimit, currentTime, activeKeywords.join(','));
     }
 
@@ -71,7 +101,6 @@ export function renderPage(
 
     if (hotKeywords && hotKeywords.length > 0) {
         content += `<div class="filters" style="padding-top: 5px;"><div class="filter-group">
-          <span class="filter-label" style="min-width: 60px;">HOT TAGS:</span>
           <div class="tags-container">`;
 
         hotKeywords.forEach(k => {
@@ -91,6 +120,21 @@ export function renderPage(
             content += `<a href="/?limit=${currentLimit}&time=${currentTime}" class="filter-tag" style="background: rgba(0,0,0,0.05); color: #888;">Clear All ✕</a>`;
         }
         content += `</div></div></div>`;
+    }
+
+    const kwParamStr = activeKeywords.length > 0 ? `&keywords=${encodeURIComponent(activeKeywords.join(','))}` : '';
+    if (!topicName) {
+        content += `
+        <div class="filters">
+            <div class="filter-group">
+                ${[5, 10, 15, 25].map(l => `<a href="/?limit=${l}&time=${currentTime}${kwParamStr}" class="filter-btn ${currentLimit === l ? 'active' : ''}">${l}개</a>`).join('')}
+            </div>
+            ${activeKeywords.length === 0 ? `
+            <div class="filter-group">
+                ${[1, 3, 6, 12, 24].map(t => `<a href="/?limit=${currentLimit}&time=${t}${kwParamStr}" class="filter-btn ${currentTime === t ? 'active' : ''}">${t}시간</a>`).join('')}
+            </div>
+            ` : ''}
+        </div>`;
     }
 
     const maxItemsPerSource = currentLimit;
@@ -119,7 +163,7 @@ export function renderPage(
         content += `<div style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
             <a href="/?page=${page + 1}&limit=${currentLimit}&time=${currentTime}${nextKeywordsParam}" 
                style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold;">
-               Next Page
+               더 보기
             </a>
         </div>`;
     }
@@ -162,7 +206,7 @@ uiRouter.get("/", async (request, env) => {
         FROM news n
         JOIN sources s ON n.source_id = s.id
         WHERE n.published_at >= ?
-        ORDER BY n.created_at DESC
+        ORDER BY COALESCE(n.published_at, n.created_at) DESC
         LIMIT 500
     `;
     let queryParams: any[] = [cutoffISO];
@@ -180,7 +224,7 @@ uiRouter.get("/", async (request, env) => {
             JOIN news_topics nt ON n.id = nt.news_id
             JOIN topics t ON nt.topic_id = t.id
             WHERE (${likeConditions})
-            ORDER BY n.created_at DESC
+            ORDER BY COALESCE(n.published_at, n.created_at) DESC
             LIMIT 30 OFFSET ?
         `;
         queryParams = [...likeParams, offset];
@@ -217,9 +261,11 @@ uiRouter.get("/", async (request, env) => {
         .slice(0, 10)
         .map(e => e[0]);
 
-    const ranked = news
-        .map((item) => ({ ...item, score: hnScore(item.upvotes, item.view_count || 0, item.published_at, now) }))
-        .sort((a, b) => b.score - a.score);
+    const ranked = news.sort((a, b) => {
+        const dateA = new Date(a.published_at || a.created_at).getTime();
+        const dateB = new Date(b.published_at || b.created_at).getTime();
+        return dateB - dateA;
+    });
 
     const html = renderPage(ranked, user, "", limit, timeHours, hotTopics, hotKeywords, selectedKeywords, page);
 
@@ -257,11 +303,9 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
 
     const news = results ?? [];
 
-    let content = `<h2 style="padding: 20px; color: var(--secondary)">Topic: ${topicRow.title}</h2>`;
-    content += renderNewsList("Articles", news);
-    const html = renderHTML(content, user?.username);
+    const html = renderPage(news, user, topicRow.title);
 
-    return new Response(html, { headers: { "Content-Type": "text/html" } });
+    return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });
 
 uiRouter.get("/user", async (request, env) => {
@@ -280,8 +324,8 @@ uiRouter.get("/user", async (request, env) => {
     `).bind(user.id).all<NewsRow>();
 
     const news = results ?? [];
-    const html = renderPage(news, user, "voted");
-    return new Response(html, { headers: { "Content-Type": "text/html" } });
+    const html = renderPage(news, user, "투표한 기사");
+    return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });
 
 uiRouter.get("/guidelines", async (request, env) => {

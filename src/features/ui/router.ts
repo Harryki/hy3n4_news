@@ -201,14 +201,25 @@ uiRouter.get("/", async (request, env) => {
     const cutoffISO = cutoffTime.toISOString();
 
     let newsQuery = `
-        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name,
-               (SELECT group_concat(t.keywords) FROM news_topics nt JOIN topics t ON nt.topic_id = t.id WHERE nt.news_id = n.id) as keywords
-        FROM news n
-        JOIN sources s ON n.source_id = s.id
-        WHERE n.published_at >= ?
-        ORDER BY COALESCE(n.published_at, n.created_at) DESC
-        LIMIT 500
+        SELECT 
+            n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
+            s.name as source_name,
+            -- This now only runs for the LIMIT amount (e.g., 20 times), not 12,000 times
+            (SELECT group_concat(t.keywords) 
+            FROM news_topics nt 
+            JOIN topics t ON nt.topic_id = t.id 
+            WHERE nt.news_id = n.id) as keywords
+        FROM (
+            SELECT id, source_id
+            FROM news
+            WHERE published_at >= ?
+            ORDER BY created_at DESC
+            LIMIT 200
+        ) AS limited_news
+        JOIN news n ON n.id = limited_news.id
+        JOIN sources s ON n.source_id = limited_news.source_id;
     `;
+
     let queryParams: any[] = [cutoffISO];
 
     if (selectedKeywords.length > 0) {
@@ -217,31 +228,56 @@ uiRouter.get("/", async (request, env) => {
         const offset = (page - 1) * 30;
 
         newsQuery = `
-            SELECT DISTINCT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name,
-                   (SELECT group_concat(t2.keywords) FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
-            FROM news n
+            SELECT 
+                n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
+                s.name AS source_name,
+                (SELECT group_concat(t2.keywords) 
+                FROM news_topics nt2 
+                JOIN topics t2 ON nt2.topic_id = t2.id 
+                WHERE nt2.news_id = n.id) AS keywords
+            FROM (
+                -- Step 1: Find ONLY the IDs of the 30 rows we actually need
+                SELECT DISTINCT n.id, COALESCE(n.published_at, n.created_at) as sort_date
+                FROM news n
+                JOIN news_topics nt ON n.id = nt.news_id
+                JOIN topics t ON nt.topic_id = t.id
+                WHERE (${likeConditions})
+                ORDER BY sort_date DESC
+                LIMIT 30 OFFSET ?
+            ) AS filtered
+            JOIN news n ON n.id = filtered.id
             JOIN sources s ON n.source_id = s.id
-            JOIN news_topics nt ON n.id = nt.news_id
-            JOIN topics t ON nt.topic_id = t.id
-            WHERE (${likeConditions})
-            ORDER BY COALESCE(n.published_at, n.created_at) DESC
-            LIMIT 30 OFFSET ?
+            ORDER BY filtered.sort_date DESC;
         `;
         queryParams = [...likeParams, offset];
+    }
+
+    // DEBUG 
+    const placeholderCount = (newsQuery.match(/\?/g) || []).length;
+    if (placeholderCount !== queryParams.length) {
+        console.log(`SQL expects ${placeholderCount} params. Received ${queryParams.length}.`);
+        console.log(newsQuery)
+        throw new Error("Binding mismatch detected!");
     }
 
     const { results } = await env.DB.prepare(newsQuery).bind(...queryParams).all<NewsRow>();
     const news = results ?? [];
 
     const { results: topics } = await env.DB.prepare(`
-        SELECT t.id, t.title, t.keywords, count(nt.news_id) as article_count
-        FROM topics t
-        JOIN news_topics nt ON t.id = nt.topic_id
-        WHERE t.updated_at >= datetime('now', '-24 hours')
-        GROUP BY t.id
-        HAVING article_count > 1
-        ORDER BY t.updated_at DESC, article_count DESC
-        LIMIT 10
+        SELECT t.id, t.title, t.keywords, topic_counts.article_count
+        FROM (
+            -- Step 1: Only look at topics updated in the last 24 hours
+            SELECT topic_id, COUNT(news_id) as article_count
+            FROM news_topics
+            WHERE topic_id IN (
+                SELECT id FROM topics WHERE updated_at >= datetime('now', '-24 hours')
+            )
+            GROUP BY topic_id
+            HAVING article_count > 1
+        ) AS topic_counts
+        JOIN topics t ON t.id = topic_counts.topic_id
+        ORDER BY t.updated_at DESC, topic_counts.article_count DESC
+        LIMIT 10;
     `).all<TopicRow>();
     const hotTopics = topics ?? [];
 

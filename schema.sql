@@ -57,11 +57,6 @@ CREATE TABLE IF NOT EXISTS clicks (
   FOREIGN KEY (news_id) REFERENCES news(id)
 );
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_news_upvotes_created ON news(upvotes DESC, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_news_source ON news(source_id);
-CREATE INDEX IF NOT EXISTS idx_clicks_news ON clicks(news_id);
-
 -- Clustering: Topics
 CREATE TABLE IF NOT EXISTS topics (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,5 +77,30 @@ CREATE TABLE IF NOT EXISTS news_topics (
   FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_news_topics_topic ON news_topics(topic_id);
-CREATE INDEX IF NOT EXISTS idx_topics_updated ON topics(updated_at DESC);
+-- -- Indexes
+
+-- Handles the Main Feed (WHERE published_at / ORDER BY created_at)
+CREATE INDEX IF NOT EXISTS idx_news_feed_composite 
+ON news(published_at DESC, created_at DESC);
+
+-- Handles the Keyword Search sort (ORDER BY COALESCE)
+-- This is a functional index supported by D1 (SQLite)
+CREATE INDEX IF NOT EXISTS idx_news_coalesce_sort 
+ON news(COALESCE(published_at, created_at) DESC);
+
+-- Covering Index for Topic Aggregation (The "Top 10" query)
+CREATE INDEX IF NOT EXISTS idx_news_topics_topic_news 
+ON news_topics(topic_id, news_id);
+
+-- Covering Index for Keyword Subqueries (The group_concat part)
+CREATE INDEX IF NOT EXISTS idx_news_topics_news_topic 
+ON news_topics(news_id, topic_id);
+
+-- Covering Index for Topic Discovery (WHERE updated_at / SELECT id, title)
+CREATE INDEX IF NOT EXISTS idx_topics_recent_full 
+ON topics(updated_at DESC, id, title);
+
+-- Existing essentials to keep
+CREATE INDEX IF NOT EXISTS idx_news_upvotes_created ON news(upvotes DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_news_source ON news(source_id);
+CREATE INDEX IF NOT EXISTS idx_clicks_news ON clicks(news_id);

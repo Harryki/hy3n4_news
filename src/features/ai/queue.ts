@@ -3,17 +3,24 @@ import { Env } from "../../auth";
 export async function processNewsQueue(messages: any[], env: Env): Promise<void> {
     console.log(`[QUEUE] Received batch of ${messages.length} messages`);
 
-    const newsIds = messages.map(m => m.body?.news_id).filter(id => id !== undefined);
+    // const newsIds = messages.map(m => m.body?.news_id).filter(id => id !== undefined);
+    const newsIds = messages.flatMap(m => m.body?.news_ids ?? []).filter((id): id is number => typeof id === 'number');
+    console.log(`[QUEUE] Total newsIds after flatten: ${newsIds.length}`);
+
     if (newsIds.length === 0) return;
 
-    // Fetch article details
-    const placeholders = newsIds.map(() => "?").join(",");
-    const { results: unclustered } = await env.DB.prepare(`
+    const BATCH_SIZE = 100;
+    const unclustered = [];
+    for (let i = 0; i < newsIds.length; i += BATCH_SIZE) {
+        const batch = newsIds.slice(i, i + BATCH_SIZE);
+        const placeholders = batch.map(() => "?").join(",");
+        const { results } = await env.DB.prepare(`
         SELECT id, title, description
         FROM news
         WHERE id IN (${placeholders})
-    `).bind(...newsIds).all<{ id: number; title: string; description: string }>();
-
+        `).bind(...batch).all();
+        unclustered.push(...results);
+    }
     if (!unclustered || unclustered.length === 0) return;
 
     console.log(`[QUEUE] Processing ${unclustered.length} articles for clustering...`);

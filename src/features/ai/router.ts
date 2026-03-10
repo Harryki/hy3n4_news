@@ -20,12 +20,29 @@ aiRouter.get("/___force-ai-update", async (request, env) => {
         `).all<{ id: number }>();
 
         if (unclustered && unclustered.length > 0 && env.NEWS_PROCESSING_QUEUE) {
+            type QueueMessage = { body: { news_id: number } };
             const messages = unclustered.map(item => ({ body: { news_id: item.id } }));
-
+            const DELAY_MS = 200;
             const BATCH_LIMIT = 100;
+
             for (let i = 0; i < messages.length; i += BATCH_LIMIT) {
                 const chunk = messages.slice(i, i + BATCH_LIMIT);
-                await env.NEWS_PROCESSING_QUEUE.sendBatch(chunk);
+                const sendWithRetry = async (data: QueueMessage[], attempt: number = 1): Promise<void> => {
+                    try {
+                        await env.NEWS_PROCESSING_QUEUE.sendBatch(data);
+                    } catch (error: any) {
+                        if (error.message.includes("Too Many Requests") && attempt <= 3) {
+                            console.warn(`[QUEUE] Rate limited. Retrying attempt ${attempt}...`);
+                            await new Promise(res => setTimeout(res, 1000 * attempt)); // 1초, 2초... 점진적 대기
+                            return sendWithRetry(data, attempt + 1);
+                        }
+                        throw error;
+                    }
+                };
+                await sendWithRetry(chunk);
+                if (i + BATCH_LIMIT < messages.length) {
+                    await new Promise(res => setTimeout(res, DELAY_MS));
+                }
             }
 
             return new Response(`Queued ${unclustered.length} articles for processing.`, { status: 200 });

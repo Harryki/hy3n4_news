@@ -19,6 +19,7 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
     console.log(`[QUEUE] Processing ${unclustered.length} articles for clustering...`);
     let clusteredCount = 0;
     let newTopicCount = 0;
+    const topicsToCheck = new Set<number>();
 
     // 1. Generate Embeddings (in smaller chunks to avoid Network Connection Lost)
     const textsToEmbed = unclustered.map(item =>
@@ -33,11 +34,6 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
         vectors = vectors.concat(embedRes.data);
     }
 
-    // prepare batch containers
-    const d1Statements: any[] = [];
-    const vectorizeInserts: any[] = [];
-    const topicsToCheck = new Set<number>();
-
     // 2. Process each item (Clustering)
     for (let i = 0; i < unclustered.length; i++) {
         const item = unclustered[i];
@@ -51,13 +47,19 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
             // Map to existing topics
             for (const match of matches) {
                 const topicId = parseInt(match.id, 10);
-                // user INSERT OR IGNORE to prevent unique constarint crashes
-                d1Statements.push(env.DB.prepare(
-                    "INSERT OR IGNORE INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
-                ).bind(item.id, topicId, match.score));
+                try {
+                    await env.DB.prepare(
+                        "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
+                    ).bind(item.id, topicId, match.score).run();
 
-                topicsToCheck.add(topicId);
+                    await env.DB.prepare(
+                        "UPDATE topics SET updated_at = datetime('now') WHERE id = ?"
+                    ).bind(topicId).run();
 
+                    topicsToCheck.add(topicId);
+                } catch (e) {
+                    // Ignore unique constraint violations
+                }
             }
             clusteredCount++;
         } else {
@@ -67,36 +69,18 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
             ).bind(item.title).first<{ id: number }>();
 
             if (newTopic) {
-                d1Statements.push(env.DB.prepare(
+                await env.DB.prepare(
                     "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
-                ).bind(item.id, newTopic.id, 1.0));
+                ).bind(item.id, newTopic.id, 1.0).run();
 
-                vectorizeInserts.push({ id: newTopic.id.toString(), values: vector });
+                await env.VECTORIZE.insert([{
+                    id: newTopic.id.toString(),
+                    values: vector
+                }]);
                 newTopicCount++;
             }
         }
     }
-    // 1. 배치용 통합 배열 선언
-    const finalBatch: any[] = [];
-    // Add timestamp updates to the batch
-
-    topicsToCheck.forEach(id => {
-        finalBatch.push(env.DB.prepare("UPDATE topics SET updated_at = datetime('now') WHERE id = ?").bind(id));
-    });
-    finalBatch.push(...d1Statements);
-
-    console.log(`[QUEUE] Executing batch: ${topicsToCheck.size} topic updates, ${d1Statements.length} link inserts`);
-
-    if (finalBatch.length > 0) {
-        try {
-            await env.DB.batch(finalBatch);
-        } catch (e: any) {
-            console.info(finalBatch);
-            throw e; // 큐가 다시 시도하도록 던짐
-        }
-    }
-
-    if (vectorizeInserts.length > 0) await env.VECTORIZE.insert(vectorizeInserts);
 
     console.log(`[QUEUE] Clustering complete. Mapped: ${clusteredCount}, New topics: ${newTopicCount}`);
 

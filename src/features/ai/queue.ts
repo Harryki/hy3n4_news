@@ -55,13 +55,15 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
                     await env.DB.prepare(
                         "UPDATE topics SET updated_at = datetime('now') WHERE id = ?"
                     ).bind(topicId).run();
+                    clusteredCount++;
 
                     topicsToCheck.add(topicId);
-                } catch (e) {
+                } catch (e: any) {
                     // Ignore unique constraint violations
+                    console.error(`[QUEUE] UPDATE topics error ${topicId}:`, e.message);
                 }
             }
-            clusteredCount++;
+
         } else {
             // Create new topic
             const newTopic = await env.DB.prepare(
@@ -69,15 +71,19 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
             ).bind(item.title).first<{ id: number }>();
 
             if (newTopic) {
-                await env.DB.prepare(
-                    "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
-                ).bind(item.id, newTopic.id, 1.0).run();
+                try {
+                    await env.DB.prepare(
+                        "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
+                    ).bind(item.id, newTopic.id, 1.0).run();
 
-                await env.VECTORIZE.insert([{
-                    id: newTopic.id.toString(),
-                    values: vector
-                }]);
-                newTopicCount++;
+                    await env.VECTORIZE.insert([{
+                        id: newTopic.id.toString(),
+                        values: vector
+                    }]);
+                    newTopicCount++;
+                } catch (e: any) {
+                    console.error(`[QUEUE] NEW topics error ${newTopic.id}:`, e.message);
+                }
             }
         }
     }

@@ -151,8 +151,9 @@ export function renderPage(
     });
     // console.log(itemsBySource)
     const sources = Object.keys(itemsBySource).sort((a,b) => {
-        const lenDiff = itemsBySource[b].length - itemsBySource[a].length;
-        if (lenDiff !== 0) return lenDiff;
+        const aTime = new Date(itemsBySource[a][0]?.published_at ?? 0).getTime();
+        const bTime = new Date(itemsBySource[b][0]?.published_at ?? 0).getTime();
+        if (aTime !== bTime) return bTime - aTime;
         return a.localeCompare(b);
     });
     let colsHtml = "";

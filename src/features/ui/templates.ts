@@ -555,8 +555,6 @@ export function renderNewsList(sourceName: string, news: any[]) {
           <div class="news-content">
             <a href="/go/${item.id}" target="_blank" class="news-title">${item.title}</a>
             <div class="news-meta">
-              <button class="meta-pill meta-points" title="Toggle Upvote" hx-post="/vote/${item.id}" hx-target="#score-${item.id}" hx-swap="innerHTML"><span id="score-${item.id}">${item.upvotes || 0}</span> pts</button>
-              ${item.view_count !== undefined ? `<span class="meta-pill meta-views">${item.view_count || 0} views</span>` : ''}
               <span class="meta-pill meta-time">${timeStr}</span>
               <span class="news-domain">(${domain})</span>
               ${keywordHtml}
@@ -609,11 +607,9 @@ export function renderWideNewsList(news: any[]) {
           <div class="news-content">
             <a href="/go/${item.id}" target="_blank" class="news-title" style="font-size: 15px; margin-bottom: 4px;">${item.title}</a>
             <div class="news-meta">
-              ${keywordHtml}
-              <button class="meta-pill meta-points" title="Toggle Upvote" hx-post="/vote/${item.id}" hx-target="#score-${item.id}" hx-swap="innerHTML"><span id="score-${item.id}">${item.upvotes || 0}</span> pts</button>
-              ${item.view_count !== undefined ? `<span class="meta-pill meta-views">${item.view_count || 0} views</span>` : ''}
               <span class="meta-pill" style="background:rgba(87,53,43,0.1); color:var(--secondary);">${item.source_name}</span>
               <span class="meta-pill meta-time">${timeStr}</span>
+              ${keywordHtml}
             </div>
             ${item.description ? `<p style="font-size:12px; color:var(--secondary); margin-top:8px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${item.description}</p>` : ''}
           </div>

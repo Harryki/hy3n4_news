@@ -204,6 +204,7 @@ uiRouter.get("/", async (request, env) => {
     const cutoffTime = new Date(now.getTime() - timeHours * 60 * 60 * 1000);
     const cutoffISO = cutoffTime.toISOString();
 
+    // Currently, it fetch 125 news from entire news table
     let newsQuery = `
         SELECT 
             n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
@@ -213,7 +214,6 @@ uiRouter.get("/", async (request, env) => {
             JOIN topics t ON nt.topic_id = t.id 
             WHERE nt.news_id = n.id) as keywords
         FROM (
-            -- 1. 먼저 중복 없는 뉴스 ID 125개만 정확히 뽑습니다.
             SELECT id, source_id
             FROM news
             WHERE published_at >= ?
@@ -221,10 +221,7 @@ uiRouter.get("/", async (request, env) => {
             LIMIT 125
         ) AS limited_news
         JOIN news n ON n.id = limited_news.id
-        -- 2. 소스 테이블과 조인하되, 뉴스 하나당 소스가 하나라고 보장된다면 그대로 두고
-        -- 만약 소스가 여러 개라면 여기서 중복이 생기므로 주의해야 합니다.
         JOIN sources s ON n.source_id = s.id
-        -- 3. 혹시 모를 내부 중복을 방지하기 위해 정렬을 다시 맞춥니다.
         ORDER BY n.created_at DESC;
     `;
 
@@ -279,7 +276,6 @@ uiRouter.get("/", async (request, env) => {
     const { results: topics } = await env.DB.prepare(`
         SELECT t.id, t.title, t.keywords, topic_counts.article_count
         FROM (
-            -- Step 1: Only look at topics updated in the last 24 hours
             SELECT topic_id, COUNT(news_id) as article_count
             FROM news_topics
             WHERE topic_id IN (
@@ -307,7 +303,7 @@ uiRouter.get("/", async (request, env) => {
     });
     const hotKeywords = Array.from(keywordFreq.entries())
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
+        .slice(0, 20)
         .map(e => e[0]);
 
     const ranked = news.sort((a, b) => {
@@ -315,7 +311,7 @@ uiRouter.get("/", async (request, env) => {
         const dateB = new Date(b.published_at || b.created_at).getTime();
         return dateB - dateA;
     });
-    // console.log(ranked)
+    // console.log(ranked.length)
     const html = renderPage(ranked, user, "", limit, timeHours, hotTopics, hotKeywords, selectedKeywords, page);
 
     const response = new Response(html, {

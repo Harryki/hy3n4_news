@@ -553,7 +553,7 @@ export function renderNewsList(sourceName: string, news: any[]) {
     html += `
         <li class="news-item">
           <div class="news-content">
-            <a href="/go/${item.id}" target="_blank" class="news-title">${item.title}</a>
+            <a href="/go/${item.id}" rel="nofollow" target="_blank" class="news-title">${item.title}</a>
             <div class="news-meta">
               <span class="meta-pill meta-time">${timeStr}</span>
               <span class="news-domain">(${domain})</span>

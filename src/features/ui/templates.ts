@@ -449,10 +449,9 @@ export function renderHTML(content: string, user: string | null = null, currentL
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>하이에나뉴스 | 주요 언론사 실시간 헤드라인 모아보기</title>
-  <meta name="description" content="조선일보, 중앙일보, 동아일보, 한겨레 등 대한민국 주요 언론사의 실시간 뉴스와 헤드라인을 한 곳에서 모아보세요. AI 기반 토픽 클러스터링으로 핫이슈를 한눈에 파악할 수 있습니다.">
-  <meta name="keywords" content="하이에나뉴스, 뉴스 모아보기, 실시간 뉴스, 뉴스 클러스터링, 정치 뉴스, 경제 뉴스, 사회 뉴스, 조선일보, 중앙일보, 동아일보, 한겨레, 경향신문">
-  <meta property="og:title" content="하이에나뉴스 | 주요 언론사 실시간 헤드라인 모아보기">
-  <meta property="og:description" content="대한민국 주요 언론사의 뉴스를 한눈에 파악하는 가장 빠른 방법. AI가 요약한 핫이슈를 지금 확인하세요.">
+  <meta name="description" content="조선 일보, 중앙 일보, 동아 일보, 한겨레 등 한국 주요 언론사의 오늘 경제 뉴스 기사 헤드라인을 한 곳에서 모아보세요.">
+  <meta property="og:title" content="하이에나 뉴스">
+  <meta property="og:description" content="언론사별 헤드라인을 한눈에 비교. 같은 사건을 각 언론이 어떻게 다루는지 바로 확인하세요.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hy3n4-news.zgp7777.workers.dev/">
   <meta property="og:site_name" content="하이에나뉴스">
@@ -460,7 +459,7 @@ export function renderHTML(content: string, user: string | null = null, currentL
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="하이에나뉴스 | 주요 언론사 실시간 헤드라인 모아보기">
   <meta name="twitter:description" content="대한민국 주요 언론사의 뉴스를 한눈에 파악하는 가장 빠른 방법.">
-  <link rel="canonical" href="https://hy3n4-news.zgp7777.workers.dev/">
+  <link rel="canonical" href="https://hy3n4.news/">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📰</text></svg>">
   <script type="application/ld+json">
   {

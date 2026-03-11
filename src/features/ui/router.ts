@@ -274,7 +274,12 @@ uiRouter.get("/", async (request, env) => {
     const news = results ?? [];
 
     const { results: topics } = await env.DB.prepare(`
-        SELECT t.id, t.title, t.keywords, topic_counts.article_count
+        SELECT 
+            t.id, 
+            t.title, 
+            t.keywords, 
+            topic_counts.article_count,
+            (topic_counts.article_count * 1.0) / POW(((julianday('now') - julianday(t.updated_at)) * 24) + 2, 1.8) AS trending_score
         FROM (
             SELECT topic_id, COUNT(news_id) as article_count
             FROM news_topics
@@ -285,7 +290,7 @@ uiRouter.get("/", async (request, env) => {
             HAVING article_count > 1
         ) AS topic_counts
         JOIN topics t ON t.id = topic_counts.topic_id
-        ORDER BY t.updated_at DESC, topic_counts.article_count DESC
+        ORDER BY trending_score DESC
         LIMIT 10;
     `).all<TopicRow>();
     const hotTopics = topics ?? [];

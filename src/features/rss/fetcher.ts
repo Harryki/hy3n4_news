@@ -167,7 +167,7 @@ export async function performRSSFetch(env: Env): Promise<void> {
 
     // 3. 모든 피드 순회가 끝난 후, 모아진 ID가 있다면 한 번에 큐 처리
     if (allNewIds.length > 0 && env.NEWS_PROCESSING_QUEUE) {
-        const BATCH_SIZE = 100;
+        const BATCH_SIZE = 100; // D1 max bound parameters per query
         const DELAY_MS = 200;
 
         const sendWithRetry = async (batch: number[], attempt: number = 1): Promise<void> => {

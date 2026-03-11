@@ -150,7 +150,11 @@ export function renderPage(
         }
     });
     // console.log(itemsBySource)
-    const sources = Object.keys(itemsBySource).sort();
+    const sources = Object.keys(itemsBySource).sort((a,b) => {
+        const lenDiff = itemsBySource[b].length - itemsBySource[a].length;
+        if (lenDiff !== 0) return lenDiff;
+        return a.localeCompare(b);
+    });
     let colsHtml = "";
     sources.forEach((sourceName) => {
         colsHtml += renderNewsList(sourceName, itemsBySource[sourceName]);

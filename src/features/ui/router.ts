@@ -196,7 +196,7 @@ uiRouter.get("/", async (request, env) => {
     const cookieTime = getCookie(request, "pref_time");
 
     const page = parseInt(queryPage || "1", 10);
-    const limit = parseInt(queryLimit || cookieLimit || "25", 10);
+    const limit = parseInt(queryLimit || cookieLimit || "10", 10);
     const timeHours = parseInt(queryTime || cookieTime || "24", 10);
     const selectedKeywords = queryKeywords ? queryKeywords.split(',').map(k => k.trim()).filter(k => k !== '') : [];
 
@@ -206,26 +206,27 @@ uiRouter.get("/", async (request, env) => {
 
     // Currently, it fetch 125 news from entire news table
     let newsQuery = `
+        WITH ranked_news AS (
+            SELECT id, source_id,
+                   ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY published_at DESC) as rn
+            FROM news
+            WHERE published_at >= ?
+        )
         SELECT 
             n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
             s.name as source_name,
-            (SELECT group_concat(t.keywords) 
-            FROM news_topics nt 
-            JOIN topics t ON nt.topic_id = t.id 
-            WHERE nt.news_id = n.id) as keywords
-        FROM (
-            SELECT id, source_id
-            FROM news
-            WHERE published_at >= ?
-            ORDER BY created_at DESC
-            LIMIT 125
-        ) AS limited_news
-        JOIN news n ON n.id = limited_news.id
+            group_concat(t.keywords) as keywords
+        FROM ranked_news
+        JOIN news n ON n.id = ranked_news.id
         JOIN sources s ON n.source_id = s.id
-        ORDER BY n.created_at DESC;
+        LEFT JOIN news_topics nt ON nt.news_id = n.id
+        LEFT JOIN topics t ON t.id = nt.topic_id
+        WHERE ranked_news.rn <= ?
+        GROUP BY n.id
+        ORDER BY n.published_at DESC;
     `;
 
-    let queryParams: any[] = [cutoffISO];
+    let queryParams: any[] = [cutoffISO, limit];
 
     if (selectedKeywords.length > 0) {
         const likeConditions = selectedKeywords.map(() => "t.keywords LIKE ?").join(' AND ');

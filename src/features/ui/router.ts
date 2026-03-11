@@ -216,14 +216,14 @@ uiRouter.get("/", async (request, env) => {
         SELECT 
             n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
             s.name as source_name,
-            group_concat(t.keywords) as keywords
+            (SELECT group_concat(t.keywords) 
+             FROM news_topics nt 
+             JOIN topics t ON nt.topic_id = t.id 
+             WHERE nt.news_id = n.id) as keywords
         FROM ranked_news
         JOIN news n ON n.id = ranked_news.id
         JOIN sources s ON n.source_id = s.id
-        LEFT JOIN news_topics nt ON nt.news_id = n.id
-        LEFT JOIN topics t ON t.id = nt.topic_id
         WHERE ranked_news.rn <= ?
-        GROUP BY n.id
         ORDER BY n.published_at DESC;
     `;
 

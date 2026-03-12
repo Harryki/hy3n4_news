@@ -10,7 +10,7 @@ export const CSS_STYLES = `
     }
 
     body {
-      font-family: 'MaruBuri', 'Nanum Myeongjo', serif;
+      font-family: 'MaruBuri', Arial, serif;
       background: var(--bg);
       color: var(--text);
       max-width: 100%;
@@ -20,7 +20,7 @@ export const CSS_STYLES = `
     }
 
     header {
-      font-family: 'Pretendard', sans-serif;
+      font-family: "Godo", "Inter", Arial, sans-serif;
       background: var(--border);
       padding: 8px 12px;
       display: flex;
@@ -30,8 +30,8 @@ export const CSS_STYLES = `
     }
 
     header h1 {
-      font-size: 14px;
-      font-weight: bold;
+      font-weight: 400;
+      font-size: 18px;
       color: var(--bg);
       letter-spacing: 1px;
       text-transform: uppercase;
@@ -50,7 +50,7 @@ export const CSS_STYLES = `
 
     .auth-area {
       margin-left: auto;
-      font-size: 12px;
+      font-size: 14px;
       color: var(--bg);
     }
 
@@ -87,7 +87,7 @@ export const CSS_STYLES = `
     }
 
     .filter-label {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: bold;
       color: #888;
       letter-spacing: 0.5px;
@@ -214,12 +214,12 @@ export const CSS_STYLES = `
 
     .topic-pill-count {
       opacity: 0.7;
-      font-size: 11px;
+      font-size: 13px;
       margin-left: 6px;
     }
     
     .topic-pill-keywords {
-      font-size: 11px;
+      font-size: 13px;
       color: #828282;
       font-weight: normal;
     }
@@ -231,6 +231,7 @@ export const CSS_STYLES = `
     }
 
     .column-header {
+      font-family: "Godo", "Inter", Arial, sans-serif;
       font-size: 16px;
       font-weight: bold;
       color: var(--secondary);
@@ -300,12 +301,12 @@ export const CSS_STYLES = `
     .news-title {
       color: var(--text);
       text-decoration: none;
-      font-size: 13px;
-      font-weight: bold;
+      font-size: 15px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       display: block;
+      margin-bottom: 4px;
     }
 
     .news-title:visited {
@@ -322,13 +323,13 @@ export const CSS_STYLES = `
     }
 
     .news-item-meta {
-      font-size: 11px;
+      font-size: 12px;
       color: #828282;
       margin-top: 6px;
     }
     
     .news-item-tags {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--border);
       margin: 0;
       font-weight: 700;
@@ -342,7 +343,7 @@ export const CSS_STYLES = `
     }
 
     .meta-pill {
-      font-size: 10px;
+      font-size: 12px;
       padding: 0 6px;
       border-radius: 3px;
       font-weight: bold;
@@ -408,14 +409,12 @@ export const CSS_STYLES = `
       margin-bottom: 20px;
       padding-bottom: 8px;
       border-bottom: 2px solid var(--accent);
-      font-family: 'Pretendard', sans-serif;
     }
 
     .static-content h3 {
       color: var(--text);
       margin-top: 24px;
       margin-bottom: 12px;
-      font-family: 'Pretendard', sans-serif;
     }
 
     .static-content p, .static-content ul {
@@ -473,27 +472,24 @@ export function renderHTML(content: string, user: string | null = null, currentL
   </script>
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <style>
-    /* Pretendard Font */
-    @font-face {
-      font-family: 'Pretendard';
-      font-weight: 400;
-      font-display: swap;
-      src: local('Pretendard Regular'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Regular.woff') format('woff');
-    }
-    @font-face {
-      font-family: 'Pretendard';
-      font-weight: 500;
-      font-display: swap;
-      src: local('Pretendard Medium'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Medium.woff') format('woff');
-    }
-    @font-face {
-      font-family: 'Pretendard';
-      font-weight: 700;
-      font-display: swap;
-      src: local('Pretendard Bold'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Bold.woff') format('woff');
-    }
 
     ${CSS_STYLES}
+
+    @font-face {
+      font-family: 'MaruBuri';
+      src: url('/fonts/MaruBuri-Regular.woff2') format('woff2');
+      font-style: normal;
+      font-weight: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Godo';
+      src: url('/fonts/GodoM.woff2') format('woff2');
+      font-style: normal;
+      font-weight: normal;
+      font-display: swap;
+    }
+
   </style>
 </head>
 <body>
@@ -605,7 +601,7 @@ export function renderWideNewsList(news: any[]) {
     html += `
         <li class="news-item" style="border-bottom: 1px dashed rgba(87,53,43,0.2); padding: 16px 0;">
           <div class="news-content">
-            <a href="/go/${item.id}" target="_blank" class="news-title" style="font-size: 15px; margin-bottom: 4px;">${item.title}</a>
+            <a href="/go/${item.id}" target="_blank" class="news-title">${item.title}</a>
             <div class="news-meta">
               <span class="meta-pill" style="background:rgba(87,53,43,0.1); color:var(--secondary);">${item.source_name}</span>
               <span class="meta-pill meta-time">${timeStr}</span>

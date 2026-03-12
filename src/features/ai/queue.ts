@@ -90,6 +90,8 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
                     newTopicCount++;
                 } catch (e: any) {
                     console.error(`[QUEUE] NEW topics error ${newTopic.id}:`, e.message);
+                    console.log(`[QUEUE] DEBUG: unclustered length ${unclustered.length}, index: ${i}, newTopic: ${newTopic}`); 
+                    throw e
                 }
             }
         }

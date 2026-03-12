@@ -607,7 +607,7 @@ export function renderWideNewsList(news: any[]) {
               <span class="meta-pill meta-time">${timeStr}</span>
               ${keywordHtml}
             </div>
-            ${item.description ? `<p style="font-size:12px; color:var(--secondary); margin-top:8px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${item.description}</p>` : ''}
+            ${item.description ? `<p style="font-size:12px; color:var(--secondary); margin-top:8px; line-height: 1.8; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">${item.description}</p>` : ''}
           </div>
         </li>`;
   });

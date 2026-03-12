@@ -460,6 +460,10 @@ export function renderHTML(content: string, user: string | null = null, currentL
   <meta name="twitter:description" content="대한민국 주요 언론사의 뉴스를 한눈에 파악하는 가장 빠른 방법.">
   <link rel="canonical" href="https://hy3n4.news/">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📰</text></svg>">
+
+  <link rel="preload" href="/fonts/MaruBuri-Regular.woff2" as="font" type="font/woff2" crossorigin >
+  <link rel="preload" href="/fonts/GodoM.woff2" as="font" type="font/woff2" crossorigin >
+
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -480,14 +484,14 @@ export function renderHTML(content: string, user: string | null = null, currentL
       src: url('/fonts/MaruBuri-Regular.woff2') format('woff2');
       font-style: normal;
       font-weight: normal;
-      font-display: swap;
+      font-display: optional;
     }
     @font-face {
       font-family: 'Godo';
       src: url('/fonts/GodoM.woff2') format('woff2');
       font-style: normal;
       font-weight: normal;
-      font-display: swap;
+      font-display: optional;
     }
 
   </style>
@@ -502,7 +506,6 @@ export function renderHTML(content: string, user: string | null = null, currentL
     <header>
       <h1><a href="/" style="color: var(--bg); text-decoration: none;">하이에나뉴스</a></h1>
       <nav>
-        
       </nav>
       ${authHtml}
     </header>

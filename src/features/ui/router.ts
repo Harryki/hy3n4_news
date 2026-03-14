@@ -85,13 +85,24 @@ export function renderPage(
     hotTopics: any[] = [],
     hotKeywords: string[] = [],
     activeKeywords: string[] = [],
-    page: number = 1
+    page: number = 1,
+    topicId: number | null = null
 ): string {
     let content = "";
 
     if (topicName) {
         content += `<h2 style="padding: 20px; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}</h2>`;
         content += renderWideNewsList(news);
+        
+        if (topicId && news.length === 50) {
+            content += `<div style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
+                <a href="/topic/${topicId}?page=${page + 1}" 
+                   style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold;">
+                   더 보기
+                </a>
+            </div>`;
+        }
+        
         return renderHTML(content, user?.username, currentLimit, currentTime, activeKeywords.join(','));
     }
 
@@ -338,6 +349,11 @@ uiRouter.get("/", async (request, env) => {
 uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     const topicId = parseInt(match![1], 10);
     const user = await getSessionUser(request, env);
+    const url = new URL(request.url);
+    const queryPage = url.searchParams.get("page");
+    const page = parseInt(queryPage || "1", 10);
+    const limit = 50;
+    const offset = (page - 1) * limit;
 
     const topicRow = await env.DB.prepare("SELECT title FROM topics WHERE id = ?").bind(topicId).first<{ title: string }>();
     if (!topicRow) return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html" } });
@@ -350,12 +366,12 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
         JOIN news_topics nt ON n.id = nt.news_id
         WHERE nt.topic_id = ?
         ORDER BY COALESCE(n.published_at, n.created_at) DESC
-        LIMIT 100
-    `).bind(topicId).all<NewsRow>();
+        LIMIT ? OFFSET ?
+    `).bind(topicId, limit, offset).all<NewsRow>();
 
     const news = results ?? [];
 
-    const html = renderPage(news, user, topicRow.title);
+    const html = renderPage(news, user, topicRow.title, 25, 24, [], [], [], page, topicId);
 
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });

@@ -438,16 +438,16 @@ export const CSS_STYLES = `
     }
 
     .search-form input[type="search"] {
-      font-family: 'MaruBuri', Arial, serif;
+      font-family: 'Godo', Arial, serif;
       background: rgba(255,255,255,0.12);
       border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 16px;
+      border-radius: 8px;
       padding: 5px 14px;
       font-size: 13px;
       color: var(--bg);
-      width: 180px;
+      width: 240px;
       outline: none;
-      transition: all 0.2s;
+      transition: background 0.2s, border-color 0.2s;
     }
 
     .search-form input[type="search"]::placeholder {
@@ -457,30 +457,74 @@ export const CSS_STYLES = `
     .search-form input[type="search"]:focus {
       background: rgba(255,255,255,0.2);
       border-color: var(--accent);
-      width: 240px;
     }
 
     @media (max-width: 640px) {
-      .search-form input[type="search"] { width: 120px; }
-      .search-form input[type="search"]:focus { width: 160px; }
+      .search-form input[type="search"] { width: 160px; }
     }
 
     .search-form button {
-      background: none;
-      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--bg);
       cursor: pointer;
-      font-size: 14px;
-      padding: 4px;
-      line-height: 1;
+      padding: 6px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      height: 28px;
+      width: 28px;
+    }
+
+    .search-form button:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: var(--accent);
+    }
+
+    .search-form button:active {
+      transform: scale(0.95);
+    }
+
+    .search-form button svg {
+      width: 14px;
+      height: 14px;
+      stroke: var(--accent);
+    }
+
+    .search-form input[type="search"]:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: rgba(255,255,255,0.05);
+    }
+
+    .search-form button:disabled {
+      opacity: 0.8;
+      cursor: not-allowed;
+      border-color: rgba(255, 255, 255, 0.1);
     }
 
     .search-form .htmx-indicator {
       display: none;
-      font-size: 13px;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: var(--accent);
+      animation: spin 1s ease-in-out infinite;
     }
 
-    .search-form .htmx-indicator.htmx-request {
-      display: inline;
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .search-form.htmx-request button svg {
+      display: none;
+    }
+
+    .search-form.htmx-request .htmx-indicator {
+      display: inline-block;
     }
 
     .search-results-container {
@@ -652,10 +696,12 @@ export function renderHTML(content: string, user: string | null = null, currentL
       <h1><a href="/" style="color: var(--bg); text-decoration: none;">하이에나뉴스</a></h1>
       <nav>
       </nav>
-      <form class="search-form" hx-get="/api/search" hx-target="#search-results" hx-swap="innerHTML" hx-indicator="#search-spinner">
-        <input type="search" name="q" placeholder="토픽 검색..." autocomplete="off" />
-        <button type="submit">🔍</button>
-        <span id="search-spinner" class="htmx-indicator">⏳</span>
+      <form class="search-form" hx-get="/api/search" hx-target="#search-results" hx-swap="innerHTML" hx-indicator="this" hx-disabled-elt="this, find input, find button">
+        <input type="search" name="q" placeholder="토픽을 검색해보세용" autocomplete="off" />
+        <button type="submit">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span class="htmx-indicator"></span>
+        </button>
       </form>
       ${authHtml}
     </header>

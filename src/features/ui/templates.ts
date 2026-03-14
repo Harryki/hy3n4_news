@@ -425,6 +425,149 @@ export const CSS_STYLES = `
       margin-bottom: 8px;
       margin-left: 20px;
     }
+
+    /* Search */
+    .search-form {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+      margin-right: 12px;
+    }
+
+    .search-form input[type="search"] {
+      font-family: 'MaruBuri', Arial, serif;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 16px;
+      padding: 5px 14px;
+      font-size: 13px;
+      color: var(--bg);
+      width: 180px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .search-form input[type="search"]::placeholder {
+      color: rgba(249, 233, 218, 0.5);
+    }
+
+    .search-form input[type="search"]:focus {
+      background: rgba(255,255,255,0.2);
+      border-color: var(--accent);
+      width: 240px;
+    }
+
+    @media (max-width: 640px) {
+      .search-form input[type="search"] { width: 120px; }
+      .search-form input[type="search"]:focus { width: 160px; }
+    }
+
+    .search-form button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 4px;
+      line-height: 1;
+    }
+
+    .search-form .htmx-indicator {
+      display: none;
+      font-size: 13px;
+    }
+
+    .search-form .htmx-indicator.htmx-request {
+      display: inline;
+    }
+
+    .search-results-container {
+      background: var(--bg);
+      border-bottom: 2px solid var(--accent);
+      padding: 0 20px 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .search-results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0 12px;
+      border-bottom: 1px solid rgba(87, 53, 43, 0.2);
+      font-size: 14px;
+      color: var(--secondary);
+    }
+
+    .search-close-btn {
+      background: none;
+      border: 1px solid rgba(87, 53, 43, 0.3);
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .search-close-btn:hover {
+      background: rgba(87, 53, 43, 0.1);
+    }
+
+    .search-topic-group {
+      padding: 14px 0;
+      border-bottom: 1px dashed rgba(87, 53, 43, 0.15);
+    }
+
+    .search-topic-group:last-child {
+      border-bottom: none;
+    }
+
+    .search-topic-title {
+      font-size: 15px;
+      font-weight: bold;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .search-topic-title:hover {
+      text-decoration: underline;
+      color: var(--accent);
+    }
+
+    .search-topic-keywords {
+      font-size: 12px;
+      color: #828282;
+      margin-left: 8px;
+    }
+
+    .search-news-list {
+      list-style: none;
+      padding: 8px 0 0 0;
+    }
+
+    .search-news-list li {
+      padding: 4px 0;
+      font-size: 13px;
+    }
+
+    .search-news-link {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .search-news-link:hover {
+      text-decoration: underline;
+    }
+
+    .search-news-meta {
+      font-size: 11px;
+      color: #828282;
+    }
   `;
 
 export function renderHTML(content: string, user: string | null = null, currentLimit: number = 25, currentTime: number = 24, activeKeyword: string = '') {
@@ -507,9 +650,15 @@ export function renderHTML(content: string, user: string | null = null, currentL
       <h1><a href="/" style="color: var(--bg); text-decoration: none;">하이에나뉴스</a></h1>
       <nav>
       </nav>
+      <form class="search-form" hx-get="/api/search" hx-target="#search-results" hx-swap="innerHTML" hx-indicator="#search-spinner">
+        <input type="search" name="q" placeholder="토픽 검색..." autocomplete="off" />
+        <button type="submit">🔍</button>
+        <span id="search-spinner" class="htmx-indicator">⏳</span>
+      </form>
       ${authHtml}
     </header>
     <main>
+      <div id="search-results"></div>
       ${content}
     </main>
     <footer>

@@ -1,7 +1,156 @@
 import { Router } from "../../core/router";
 import { Env } from "../../auth";
+import { getRelativeTime } from "../ui/templates";
 
 export const aiRouter = new Router();
+
+// --- Search Results HTML Rendering ---
+
+function renderSearchEmpty(query: string): string {
+    return `
+        <div class="search-results-container">
+            <div class="search-results-header">
+                <span>"<strong>${escapeHtml(query)}</strong>" 검색 결과가 없습니다</span>
+                <button onclick="document.getElementById('search-results').innerHTML=''" class="search-close-btn">✕</button>
+            </div>
+            <p style="padding: 20px; color: #828282; text-align: center;">다른 키워드로 검색해보세요.</p>
+        </div>`;
+}
+
+function renderTopicGroups(topics: any[], newsByTopic: Record<number, any[]>): string {
+    let html = '';
+    for (const topic of topics) {
+        const topicNews = newsByTopic[topic.id as number] || [];
+        html += `
+            <div class="search-topic-group">
+                <a href="/topic/${topic.id}" class="search-topic-title">${escapeHtml(topic.title as string)}</a>
+                ${topic.keywords ? `<span class="search-topic-keywords">#${(topic.keywords as string).split(',').map((k: string) => k.trim()).join(' #')}</span>` : ''}
+                ${topicNews.length > 0 ? `<ul class="search-news-list">
+                    ${topicNews.map(n => {
+            const timeStr = getRelativeTime(n.published_at, n.created_at);
+            return `<li><a href="/go/${n.id}" target="_blank" class="search-news-link">${escapeHtml(n.title as string)}</a> <span class="search-news-meta">${n.source_name} · ${timeStr}</span></li>`;
+        }).join('')}
+                </ul>` : ''}
+            </div>`;
+    }
+    return html;
+}
+
+function renderLoadMoreButton(query: string, nextPage: number): string {
+    return `<div id="search-load-more" style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
+        <a hx-get="/api/search?q=${encodeURIComponent(query)}&page=${nextPage}" hx-target="#search-load-more" hx-swap="outerHTML"
+           style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold; cursor: pointer;">
+           더 보기
+        </a>
+    </div>`;
+}
+
+function renderSearchResults(query: string, topics: any[], news: any[], hasMore: boolean, page: number): string {
+    const newsByTopic: Record<number, any[]> = {};
+    for (const item of news) {
+        const tid = item.topic_id as number;
+        if (!newsByTopic[tid]) newsByTopic[tid] = [];
+        if (newsByTopic[tid].length < 5) {
+            newsByTopic[tid].push(item);
+        }
+    }
+
+    // Page > 1: return only the topic groups + optional load-more button (for HTMX append)
+    if (page > 1) {
+        let html = renderTopicGroups(topics, newsByTopic);
+        if (hasMore) html += renderLoadMoreButton(query, page + 1);
+        return html;
+    }
+
+    // Page 1: full container with header
+    let html = `
+        <div class="search-results-container">
+            <div class="search-results-header">
+                <span>"<strong>${escapeHtml(query)}</strong>" 관련 토픽 검색 결과</span>
+                <button onclick="document.getElementById('search-results').innerHTML=''" class="search-close-btn">✕</button>
+            </div>`;
+
+    html += renderTopicGroups(topics, newsByTopic);
+    if (hasMore) html += renderLoadMoreButton(query, page + 1);
+    html += `</div>`;
+    return html;
+}
+
+function escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// --- GET /api/search : Hybrid Topic Search (Semantic + Keyword) ---
+aiRouter.get("/api/search", async (request, env) => {
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q")?.trim();
+    if (!q) return new Response("", { status: 200 });
+
+    const PAGE_SIZE = 20;
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const offset = (page - 1) * PAGE_SIZE;
+
+    // 1. Embed query for semantic search
+    const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: [q] });
+    const vector = embedRes.data[0];
+
+    // 2. Vectorize semantic search
+    const semanticRes = await env.VECTORIZE.query(vector, { topK: 20, returnMetadata: "none" });
+    const semanticIds = semanticRes.matches
+        .filter((m: any) => m.score > 0.5)
+        .map((m: any) => parseInt(m.id, 10));
+
+    // 3. Hybrid query: semantic IDs + keyword LIKE in one D1 query (with pagination)
+    const semanticPlaceholders = semanticIds.length > 0
+        ? semanticIds.map(() => '?').join(',')
+        : null;
+
+    const whereClause = semanticPlaceholders
+        ? `id IN (${semanticPlaceholders}) OR title LIKE ? OR keywords LIKE ?`
+        : `title LIKE ? OR keywords LIKE ?`;
+
+    const bindParams = semanticPlaceholders
+        ? [...semanticIds, `%${q}%`, `%${q}%`, PAGE_SIZE + 1, offset]
+        : [`%${q}%`, `%${q}%`, PAGE_SIZE + 1, offset];
+
+    const { results: rawTopics } = await env.DB.prepare(`
+        SELECT id, title, keywords
+        FROM topics
+        WHERE ${whereClause}
+        ORDER BY updated_at DESC
+        LIMIT ? OFFSET ?
+    `).bind(...bindParams).all();
+
+    if (!rawTopics || rawTopics.length === 0) {
+        if (page === 1) {
+            return new Response(renderSearchEmpty(q), {
+                headers: { "Content-Type": "text/html; charset=utf-8" }
+            });
+        }
+        return new Response("", { status: 200 });
+    }
+
+    // Check if there are more results beyond this page
+    const hasMore = rawTopics.length > PAGE_SIZE;
+    const topics = hasMore ? rawTopics.slice(0, PAGE_SIZE) : rawTopics;
+
+    // 4. Fetch related news for matched topics
+    const topicIds = topics.map(t => t.id);
+    const newsPlaceholders = topicIds.map(() => '?').join(',');
+    const { results: news } = await env.DB.prepare(`
+        SELECT n.id, n.title, n.url, n.published_at, n.created_at, s.name as source_name, nt.topic_id
+        FROM news n
+        JOIN sources s ON n.source_id = s.id
+        JOIN news_topics nt ON n.id = nt.news_id
+        WHERE nt.topic_id IN (${newsPlaceholders})
+        ORDER BY COALESCE(n.published_at, n.created_at) DESC
+    `).bind(...topicIds).all();
+
+    // 5. Return HTML partial
+    return new Response(renderSearchResults(q, topics, news ?? [], hasMore, page), {
+        headers: { "Content-Type": "text/html; charset=utf-8" }
+    });
+});
 
 aiRouter.get("/___force-ai-update", async (request, env) => {
     const url = new URL(request.url);

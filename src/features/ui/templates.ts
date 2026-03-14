@@ -586,20 +586,24 @@ export const CSS_STYLES = `
     }
 
     .search-topic-keywords {
-      font-size: 12px;
-      color: #828282;
+      font-size: 11px;
+      color: var(--accent);
       margin-left: 8px;
     }
 
     .search-news-list {
       list-style: none;
-      padding: 8px 0 0 0;
+      padding: 0;
+      margin: 8px 0 0 24px;
+      border-left: 2px solid rgba(87, 53, 43, 0.1);
+      padding-left: 12px;
     }
 
     .search-news-list li {
       padding: 4px 0;
       font-size: 13px;
     }
+
 
     .search-news-link {
       color: var(--text);

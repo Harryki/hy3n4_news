@@ -22,7 +22,9 @@ function renderTopicGroups(topics: any[], newsByTopic: Record<number, any[]>): s
     for (const topic of topics) {
         const topicNews = newsByTopic[topic.id as number] || [];
         const updateTimeStr = topic.updated_at ? getRelativeTime(topic.updated_at, topic.updated_at) : '';
-        const updateInfo = updateTimeStr ? `<span class="search-news-meta" style="margin-left: 8px;">마지막 업데이트: ${updateTimeStr}</span>` : '';
+        const articleCount = topic.article_count || 0;
+        const countStr = articleCount > 0 ? `(기사 ${articleCount}개) · ` : '';
+        const updateInfo = (countStr || updateTimeStr) ? `<span class="search-news-meta" style="margin-left: 8px;">${countStr}마지막 업데이트: ${updateTimeStr}</span>` : '';
         
         html += `
             <div class="search-topic-group">
@@ -118,10 +120,11 @@ aiRouter.get("/api/search", async (request, env) => {
         : [`%${q}%`, `%${q}%`, PAGE_SIZE + 1, offset];
 
     const { results: rawTopics } = await env.DB.prepare(`
-        SELECT id, title, keywords, updated_at
-        FROM topics
-        WHERE ${whereClause}
-        ORDER BY updated_at DESC
+        SELECT t.id, t.title, t.keywords, t.updated_at,
+               (SELECT COUNT(*) FROM news_topics nt WHERE nt.topic_id = t.id) as article_count
+        FROM topics t
+        WHERE ${whereClause.replace(/title/g, 't.title').replace(/keywords/g, 't.keywords').replace(/id/g, 't.id')}
+        ORDER BY t.updated_at DESC
         LIMIT ? OFFSET ?
     `).bind(...bindParams).all();
 
@@ -150,8 +153,17 @@ aiRouter.get("/api/search", async (request, env) => {
         ORDER BY COALESCE(n.published_at, n.created_at) DESC
     `).bind(...topicIds).all();
 
+    const newsResults = news ?? [];
+
+    // Sort topics by associated news count (descending)
+    topics.sort((a, b) => {
+        const countA = (a.article_count as number) || 0;
+        const countB = (b.article_count as number) || 0;
+        return countB - countA;
+    });
+
     // 5. Return HTML partial
-    return new Response(renderSearchResults(q, topics, news ?? [], hasMore, page), {
+    return new Response(renderSearchResults(q, topics, newsResults, hasMore, page), {
         headers: { "Content-Type": "text/html; charset=utf-8" }
     });
 });

@@ -1,6 +1,6 @@
 import { Router } from "../../core/router";
 import { Env } from "../../auth";
-import { getRelativeTime } from "../ui/templates";
+import { getRelativeTime } from "../../core/utils";
 
 export const aiRouter = new Router();
 
@@ -21,9 +21,13 @@ function renderTopicGroups(topics: any[], newsByTopic: Record<number, any[]>): s
     let html = '';
     for (const topic of topics) {
         const topicNews = newsByTopic[topic.id as number] || [];
+        const updateTimeStr = topic.updated_at ? getRelativeTime(topic.updated_at, topic.updated_at) : '';
+        const updateInfo = updateTimeStr ? `<span class="search-news-meta" style="margin-left: 8px;">마지막 업데이트: ${updateTimeStr}</span>` : '';
+        
         html += `
             <div class="search-topic-group">
                 <a href="/topic/${topic.id}" class="search-topic-title">${escapeHtml(topic.title as string)}</a>
+                ${updateInfo}
                 ${topic.keywords ? `<span class="search-topic-keywords">#${(topic.keywords as string).split(',').map((k: string) => k.trim()).join(' #')}</span>` : ''}
                 ${topicNews.length > 0 ? `<ul class="search-news-list">
                     ${topicNews.map(n => {
@@ -114,7 +118,7 @@ aiRouter.get("/api/search", async (request, env) => {
         : [`%${q}%`, `%${q}%`, PAGE_SIZE + 1, offset];
 
     const { results: rawTopics } = await env.DB.prepare(`
-        SELECT id, title, keywords
+        SELECT id, title, keywords, updated_at
         FROM topics
         WHERE ${whereClause}
         ORDER BY updated_at DESC

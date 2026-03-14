@@ -1,5 +1,6 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
+import { getRelativeTime } from "../../core/utils";
 import { renderHTML, renderNewsList, renderTopics, renderWideNewsList } from "./templates";
 
 export const uiRouter = new Router();
@@ -86,12 +87,16 @@ export function renderPage(
     hotKeywords: string[] = [],
     activeKeywords: string[] = [],
     page: number = 1,
-    topicId: number | null = null
+    topicId: number | null = null,
+    updatedAt: string | null = null
 ): string {
     let content = "";
 
     if (topicName) {
-        content += `<h2 style="padding: 20px; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}</h2>`;
+        const timeStr = updatedAt ? getRelativeTime(updatedAt, updatedAt) : '';
+        const updateInfo = timeStr ? `<span style="font-size: 14px; color: var(--secondary); font-weight: normal; margin-left: 10px;">마지막 업데이트: ${timeStr}</span>` : '';
+        
+        content += `<h2 style="padding: 20px; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}${updateInfo}</h2>`;
         content += renderWideNewsList(news);
         
         if (topicId && news.length === 50) {
@@ -355,7 +360,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     const limit = 50;
     const offset = (page - 1) * limit;
 
-    const topicRow = await env.DB.prepare("SELECT title FROM topics WHERE id = ?").bind(topicId).first<{ title: string }>();
+    const topicRow = await env.DB.prepare("SELECT title, updated_at FROM topics WHERE id = ?").bind(topicId).first<{ title: string, updated_at: string }>();
     if (!topicRow) return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html" } });
 
     const { results } = await env.DB.prepare(`
@@ -371,7 +376,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
 
     const news = results ?? [];
 
-    const html = renderPage(news, user, topicRow.title, 25, 24, [], [], [], page, topicId);
+    const html = renderPage(news, user, topicRow.title, 25, 24, [], [], [], page, topicId, topicRow.updated_at);
 
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });

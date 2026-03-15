@@ -911,7 +911,7 @@ function escapeHtml(str: string): string {
     return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-export function renderSearchResults(query: string | null, topics: any[], newsByTopic: Record<number, any[]>): string {
+export function renderSearchResults(query: string | null, topics: any[], newsByTopic: Record<number, any[]>, page: number = 1, hasMore: boolean = false): string {
     let html = '<div class="search-results-container">';
     
     if (query) {
@@ -941,6 +941,21 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
                             </li>
                         `).join('')}
                     </ul>
+                </div>
+            `;
+        }
+
+        if (hasMore) {
+            const nextLink = query 
+                ? `/search?q=${encodeURIComponent(query)}&page=${page + 1}`
+                : `/search?page=${page + 1}`;
+            
+            html += `
+                <div style="text-align: center; padding: 20px; border-top: 1px solid var(--border); margin-top: 20px;">
+                    <a href="${nextLink}" 
+                       style="display: inline-block; padding: 10px 24px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 24px; font-weight: bold; font-size: 15px; transition: opacity 0.2s;">
+                       토픽 더 보기
+                    </a>
                 </div>
             `;
         }

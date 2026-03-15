@@ -166,9 +166,14 @@ function getCookie(request: Request, name: string): string | null {
 uiRouter.get("/search", async (request, env) => {
     const url = new URL(request.url);
     const q = url.searchParams.get("q")?.trim() || null;
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const limit = 20;
+    const offset = (page - 1) * limit;
     const user = await getSessionUser(request, env);
 
     let topics: any[] = [];
+    let hasMore = false;
+
     if (q) {
         // Hybrid Search Logic (similar to api/search)
         const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: [q] });
@@ -192,19 +197,24 @@ uiRouter.get("/search", async (request, env) => {
             FROM topics t
             WHERE ${whereClause}
             ORDER BY t.updated_at DESC
-            LIMIT 20
-        `).bind(...bindParams).all();
+            LIMIT ? OFFSET ?
+        `).bind(...bindParams, limit + 1, offset).all();
         topics = results || [];
     } else {
-        // Latest 10 Topics
+        // Latest Topics
         const { results } = await env.DB.prepare(`
             SELECT t.id, t.title, t.keywords, t.updated_at,
                    (SELECT COUNT(*) FROM news_topics nt WHERE nt.topic_id = t.id) as article_count
             FROM topics t
             ORDER BY t.updated_at DESC
-            LIMIT 10
-        `).all();
+            LIMIT ? OFFSET ?
+        `).bind(limit + 1, offset).all();
         topics = results || [];
+    }
+
+    if (topics.length > limit) {
+        hasMore = true;
+        topics.pop();
     }
 
     const newsByTopic: Record<number, any[]> = {};
@@ -231,7 +241,7 @@ uiRouter.get("/search", async (request, env) => {
         }
     }
 
-    const content = renderSearchResults(q, topics, newsByTopic);
+    const content = renderSearchResults(q, topics, newsByTopic, page, hasMore);
     return new Response(renderHTML(content, user?.username || null), {
         headers: { "Content-Type": "text/html; charset=utf-8" }
     });

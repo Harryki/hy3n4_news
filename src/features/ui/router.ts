@@ -86,7 +86,7 @@ export function renderPage(
         const timeStr = updatedAt ? getRelativeTime(updatedAt, updatedAt) : '';
         const updateInfo = timeStr ? `<span style="font-size: 14px; color: var(--secondary); font-weight: normal; margin-left: 10px;">마지막 업데이트: ${timeStr}</span>` : '';
 
-        content += `<h2 style="padding: 20px; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}${updateInfo}</h2>`;
+        content += `<h2 style="padding: 20px 0; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}${updateInfo}</h2>`;
         content += renderWideNewsList(news);
 
         if (topicId && news.length === 50) {

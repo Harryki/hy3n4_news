@@ -241,11 +241,16 @@ export const CSS_STYLES = `
     }
 
     @media (max-width: 640px) {
+      .app-container { padding: 0; }
       .news-columns { padding: 0 0 8px; gap: 12px; }
     }
 
+    main {
+      padding: 0 20px;
+    }
+
     .hot-topics {
-      padding: 20px 20px 10px;
+      padding: 20px 0 10px;
       background: var(--bg);
     }
     
@@ -599,7 +604,7 @@ export const CSS_STYLES = `
 
     .search-results-container {
       background: var(--bg);
-      padding: 0 20px 40px;
+      padding: 0 0 40px;
       max-width: 800px;
       margin: 0 auto;
     }
@@ -966,7 +971,7 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
 }
 
 export function renderWideNewsList(news: any[]) {
-  let html = `<div style="padding: 0 20px; max-width: 800px; margin: 0 auto; padding-bottom: 24px;">
+  let html = `<div style="padding: 0 0; max-width: 800px; margin: 0 auto; padding-bottom: 24px;">
       <ul class="news-list" style="list-style: none; padding: 0;">`;
 
   news.forEach((item) => {

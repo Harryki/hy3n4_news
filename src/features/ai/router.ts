@@ -25,7 +25,7 @@ function renderTopicGroups(topics: any[], newsByTopic: Record<number, any[]>): s
         const articleCount = topic.article_count || 0;
         const countStr = articleCount > 0 ? `(기사 ${articleCount}개) · ` : '';
         const updateInfo = (countStr || updateTimeStr) ? `<span class="search-news-meta" style="margin-left: 8px;">${countStr}마지막 업데이트: ${updateTimeStr}</span>` : '';
-        
+
         html += `
             <div class="search-topic-group">
                 <a href="/topic/${topic.id}" class="search-topic-title">${escapeHtml(topic.title as string)}</a>

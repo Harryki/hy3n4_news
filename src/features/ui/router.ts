@@ -24,6 +24,7 @@ interface TopicRow {
     title: string;
     article_count: number;
     keywords?: string;
+    updated_at?: string;
 }
 
 // Helper: 404 Page Template
@@ -68,15 +69,6 @@ export function renderNotFoundPage(user: { username: string } | null = null): st
     return renderHTML(errorHtml, user?.username || null);
 }
 
-// Helper: Hacker News Ranking Algorithm
-function hnScore(upvotes: number, viewCount: number, publishedAt: string, now: Date): number {
-    const p = upvotes - 1 + (viewCount * 0.1);
-    const pubDate = publishedAt ? new Date(publishedAt).getTime() : now.getTime();
-    const t = (now.getTime() - pubDate) / 3600000;
-    const gravity = 1.8;
-    return p / Math.pow((t + 2), gravity);
-}
-
 export function renderPage(
     news: any[],
     user: any,
@@ -84,8 +76,6 @@ export function renderPage(
     currentLimit: number = 25,
     currentTime: number = 24,
     hotTopics: any[] = [],
-    hotKeywords: string[] = [],
-    activeKeywords: string[] = [],
     page: number = 1,
     topicId: number | null = null,
     updatedAt: string | null = null
@@ -95,10 +85,10 @@ export function renderPage(
     if (topicName) {
         const timeStr = updatedAt ? getRelativeTime(updatedAt, updatedAt) : '';
         const updateInfo = timeStr ? `<span style="font-size: 14px; color: var(--secondary); font-weight: normal; margin-left: 10px;">마지막 업데이트: ${timeStr}</span>` : '';
-        
+
         content += `<h2 style="padding: 20px; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}${updateInfo}</h2>`;
         content += renderWideNewsList(news);
-        
+
         if (topicId && news.length === 50) {
             content += `<div style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
                 <a href="/topic/${topicId}?page=${page + 1}" 
@@ -107,53 +97,28 @@ export function renderPage(
                 </a>
             </div>`;
         }
-        
-        return renderHTML(content, user?.username, currentLimit, currentTime, activeKeywords.join(','));
+
+        return renderHTML(content, user?.username, currentLimit, currentTime);
     }
 
     if (hotTopics && hotTopics.length > 0) {
-        content += renderTopics(hotTopics, currentLimit, currentTime);
+        content += renderTopics(hotTopics);
     }
 
-    if (hotKeywords && hotKeywords.length > 0) {
-        content += `<div class="filters" style="padding-top: 5px;"><div class="filter-group">
-          <div class="tags-container">`;
+    const filtersHtml = renderHTML('', null, currentLimit, currentTime);
+    const limitsPart = filtersHtml.match(/<!--limits-->([\s\S]*?)<!--\/limits-->/)?.[1] || '';
+    const timesPart = filtersHtml.match(/<!--times-->([\s\S]*?)<!--\/times-->/)?.[1] || '';
 
-        hotKeywords.forEach(k => {
-            const isActive = activeKeywords.includes(k);
-            let newKeywords = [...activeKeywords];
-            if (isActive) {
-                newKeywords = newKeywords.filter(kw => kw !== k);
-            } else {
-                newKeywords.push(k);
-            }
+    content += `
+    <div class="filters">
+        <div class="filter-group">
+            ${limitsPart}
+        </div>
+        <div class="filter-group">
+            ${timesPart}
+        </div>
+    </div>`;
 
-            const keywordParam = newKeywords.length > 0 ? `&keywords=${encodeURIComponent(newKeywords.join(','))}` : '';
-            content += `<a href="/?limit=${currentLimit}&time=${currentTime}${keywordParam}" class="filter-tag ${isActive ? 'active' : ''}">#${k}</a>`;
-        });
-
-        if (activeKeywords.length > 0) {
-            content += `<a href="/?limit=${currentLimit}&time=${currentTime}" class="filter-tag" style="background: rgba(0,0,0,0.05); color: #888;">Clear All ✕</a>`;
-        }
-        content += `</div></div></div>`;
-    }
-
-    const kwParamStr = activeKeywords.length > 0 ? `&keywords=${encodeURIComponent(activeKeywords.join(','))}` : '';
-    if (!topicName) {
-        content += `
-        <div class="filters">
-            <div class="filter-group">
-                ${[5, 10, 15, 25].map(l => `<a href="/?limit=${l}&time=${currentTime}${kwParamStr}" class="filter-btn ${currentLimit === l ? 'active' : ''}">${l}개</a>`).join('')}
-            </div>
-            ${activeKeywords.length === 0 ? `
-            <div class="filter-group">
-                ${[1, 3, 6, 12, 24].map(t => `<a href="/?limit=${currentLimit}&time=${t}${kwParamStr}" class="filter-btn ${currentTime === t ? 'active' : ''}">${t}시간</a>`).join('')}
-            </div>
-            ` : ''}
-        </div>`;
-    }
-
-    const maxItemsPerSource = currentLimit;
     const itemsBySource: Record<string, any[]> = {};
 
     news.forEach(item => {
@@ -161,35 +126,33 @@ export function renderPage(
         if (!itemsBySource[sourceName]) {
             itemsBySource[sourceName] = [];
         }
-        if (itemsBySource[sourceName].length < maxItemsPerSource) {
+        if (itemsBySource[sourceName].length < currentLimit) {
             itemsBySource[sourceName].push(item);
         }
     });
-    // console.log(itemsBySource)
+
     const sources = Object.keys(itemsBySource).sort((a, b) => {
         const aTime = new Date(itemsBySource[a][0]?.published_at ?? 0).getTime();
         const bTime = new Date(itemsBySource[b][0]?.published_at ?? 0).getTime();
-        if (aTime !== bTime) return bTime - aTime;
-        return a.localeCompare(b);
+        return bTime - aTime;
     });
+
     let colsHtml = "";
-    sources.forEach((sourceName) => {
+    sources.forEach(sourceName => {
         colsHtml += renderNewsList(sourceName, itemsBySource[sourceName]);
     });
-
     content += `<div class="news-columns">${colsHtml}</div>`;
 
-    if (activeKeywords.length > 0 && Array.isArray(news) && news.length === 30) {
-        const nextKeywordsParam = activeKeywords.length > 0 ? `&keywords=${encodeURIComponent(activeKeywords.join(','))}` : '';
+    if (Array.isArray(news) && news.length >= currentLimit) {
         content += `<div style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
-            <a href="/?page=${page + 1}&limit=${currentLimit}&time=${currentTime}${nextKeywordsParam}" 
+            <a href="/?page=${page + 1}&limit=${currentLimit}&time=${currentTime}" 
                style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold;">
                더 보기
             </a>
         </div>`;
     }
 
-    return renderHTML(content, user?.username, currentLimit, currentTime, activeKeywords.join(','));
+    return renderHTML(content, user?.username, currentLimit, currentTime);
 }
 
 function getCookie(request: Request, name: string): string | null {
@@ -281,22 +244,19 @@ uiRouter.get("/", async (request, env) => {
     const queryPage = url.searchParams.get("page");
     const queryLimit = url.searchParams.get("limit");
     const queryTime = url.searchParams.get("time");
-    const queryKeywords = url.searchParams.get("keywords");
-
-    const cookieLimit = getCookie(request, "pref_limit");
-    const cookieTime = getCookie(request, "pref_time");
 
     const page = parseInt(queryPage || "1", 10);
-    const limit = parseInt(queryLimit || cookieLimit || "10", 10);
-    const timeHours = parseInt(queryTime || cookieTime || "24", 10);
-    const selectedKeywords = queryKeywords ? queryKeywords.split(',').map(k => k.trim()).filter(k => k !== '') : [];
+    const prefLimit = getCookie(request, "pref_limit");
+    const limit = parseInt(queryLimit || prefLimit || "10", 10);
+    const timeHours = parseInt(queryTime || "24", 10);
 
+    // SQL News Query
     const now = new Date();
-    const cutoffTime = new Date(now.getTime() - timeHours * 60 * 60 * 1000);
-    const cutoffISO = cutoffTime.toISOString();
+    const timeAgo = new Date(now.getTime() - timeHours * 60 * 60 * 1000).toISOString();
 
-    // Currently, it fetch 125 news from entire news table
-    let newsQuery = `
+    // Fetch news from all sources within time window using diverse selection
+    const { results: news } = await env.DB.prepare(`
+        -- NEWS QUERY
         WITH ranked_news AS (
             SELECT id, source_id,
                    ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY published_at DESC) as rn
@@ -306,7 +266,7 @@ uiRouter.get("/", async (request, env) => {
         SELECT 
             n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
             s.name as source_name,
-            (SELECT group_concat(t.keywords) 
+            (SELECT group_concat(t.keywords, ', ') 
              FROM news_topics nt 
              JOIN topics t ON nt.topic_id = t.id 
              WHERE nt.news_id = n.id) as keywords
@@ -315,57 +275,12 @@ uiRouter.get("/", async (request, env) => {
         JOIN sources s ON n.source_id = s.id
         WHERE ranked_news.rn <= ?
         ORDER BY n.published_at DESC;
-    `;
+    `).bind(timeAgo, limit).all<NewsRow>();
 
-    let queryParams: any[] = [cutoffISO, limit];
 
-    if (selectedKeywords.length > 0) {
-        const likeConditions = selectedKeywords.map(() => "t.keywords LIKE ?").join(' AND ');
-        const likeParams = selectedKeywords.map(k => `%${k}%`);
-        const offset = (page - 1) * 30;
-
-        newsQuery = `
-            SELECT 
-                n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
-                s.name AS source_name,
-                -- 최종 출력할 30개에 대해서만 키워드 문자열 합치기 수행
-                (SELECT group_concat(t2.keywords) 
-                FROM news_topics nt2 
-                JOIN topics t2 ON nt2.topic_id = t2.id 
-                WHERE nt2.news_id = n.id) AS keywords
-            FROM (
-                -- [핵심 수정] 서브쿼리에서는 '뉴스 ID'만 고유하게 30개 뽑습니다.
-                SELECT n.id, COALESCE(n.published_at, n.created_at) as sort_date
-                FROM news n
-                WHERE n.id IN (
-                    -- 키워드 조건을 만족하는 뉴스 ID들만 먼저 필터링
-                    SELECT DISTINCT nt.news_id
-                    FROM news_topics nt
-                    JOIN topics t ON nt.topic_id = t.id
-                    WHERE (${likeConditions})
-                )
-                ORDER BY sort_date DESC
-                LIMIT 30 OFFSET ?
-            ) AS filtered
-            JOIN news n ON n.id = filtered.id
-            JOIN sources s ON n.source_id = s.id
-            ORDER BY filtered.sort_date DESC;
-        `;
-        queryParams = [...likeParams, offset];
-    }
-
-    // DEBUG 
-    const placeholderCount = (newsQuery.match(/\?/g) || []).length;
-    if (placeholderCount !== queryParams.length) {
-        console.log(`SQL expects ${placeholderCount} params. Received ${queryParams.length}.`);
-        console.log(newsQuery)
-        throw new Error("Binding mismatch detected!");
-    }
-
-    const { results } = await env.DB.prepare(newsQuery).bind(...queryParams).all<NewsRow>();
-    const news = results ?? [];
-
+    // Hot Topics
     const { results: topics } = await env.DB.prepare(`
+        -- TOPICS QUERY
         SELECT 
             t.id, 
             t.title, 
@@ -387,29 +302,13 @@ uiRouter.get("/", async (request, env) => {
     `).all<TopicRow>();
     const hotTopics = topics ?? [];
 
-    const keywordFreq = new Map<string, number>();
-    hotTopics.forEach(t => {
-        if (t.keywords) {
-            t.keywords.split(',').forEach(k => {
-                const tk = k.trim();
-                if (tk) {
-                    keywordFreq.set(tk, (keywordFreq.get(tk) || 0) + 1);
-                }
-            });
-        }
-    });
-    const hotKeywords = Array.from(keywordFreq.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 20)
-        .map(e => e[0]);
-
-    const ranked = news.sort((a, b) => {
+    const ranked = (news ?? []).sort((a, b) => {
         const dateA = new Date(a.published_at || a.created_at).getTime();
         const dateB = new Date(b.published_at || b.created_at).getTime();
         return dateB - dateA;
     });
-    // console.log(ranked.length)
-    const html = renderPage(ranked, user, "", limit, timeHours, hotTopics, hotKeywords, selectedKeywords, page);
+
+    const html = renderPage(ranked, user, "", limit, timeHours, hotTopics, page);
 
     const response = new Response(html, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -418,40 +317,30 @@ uiRouter.get("/", async (request, env) => {
     if (queryLimit) {
         response.headers.append("Set-Cookie", `pref_limit=${limit}; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
     }
-    if (queryTime) {
-        response.headers.append("Set-Cookie", `pref_time=${timeHours}; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
-    }
 
     return response;
 });
-
 uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     const topicId = parseInt(match![1], 10);
-    const user = await getSessionUser(request, env);
     const url = new URL(request.url);
-    const queryPage = url.searchParams.get("page");
-    const page = parseInt(queryPage || "1", 10);
-    const limit = 50;
-    const offset = (page - 1) * limit;
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const user = await getSessionUser(request, env);
 
-    const topicRow = await env.DB.prepare("SELECT title, updated_at FROM topics WHERE id = ?").bind(topicId).first<{ title: string, updated_at: string }>();
+    const topicRow = await env.DB.prepare("SELECT title, updated_at, keywords FROM topics WHERE id = ?").bind(topicId).first<{ title: string; updated_at: string; keywords: string }>();
     if (!topicRow) return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html" } });
 
-    const { results } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name,
-               (SELECT group_concat(t2.keywords) FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
+    const { results: news } = await env.DB.prepare(`
+        SELECT n.id, n.title, n.url, n.description, n.published_at, n.created_at, s.name as source_name,
+               (SELECT group_concat(t2.keywords, ', ') FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
         FROM news n
-        JOIN sources s ON n.source_id = s.id
         JOIN news_topics nt ON n.id = nt.news_id
+        JOIN sources s ON n.source_id = s.id
         WHERE nt.topic_id = ?
-        ORDER BY COALESCE(n.published_at, n.created_at) DESC
-        LIMIT ? OFFSET ?
-    `).bind(topicId, limit, offset).all<NewsRow>();
+        ORDER BY n.published_at DESC
+        LIMIT 50 OFFSET ?
+    `).bind(topicId, (page - 1) * 50).all<NewsRow>();
 
-    const news = results ?? [];
-
-    const html = renderPage(news, user, topicRow.title, 25, 24, [], [], [], page, topicId, topicRow.updated_at);
-
+    const html = renderPage(news, user, topicRow.title, 25, 24, [], page, topicId, topicRow.updated_at);
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });
 
@@ -459,18 +348,17 @@ uiRouter.get("/user", async (request, env) => {
     const user = await getSessionUser(request, env);
     if (!user) return new Response(null, { status: 302, headers: { Location: "/login" } });
 
-    const { results } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.published_at, n.created_at, s.name as source_name,
-               (SELECT group_concat(t2.keywords) FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
+    const { results: news } = await env.DB.prepare(`
+        SELECT n.id, n.title, n.url, n.published_at, n.created_at, s.name as source_name,
+               (SELECT group_concat(t.keywords, ', ') FROM news_topics nt JOIN topics t ON nt.topic_id = t.id WHERE nt.news_id = n.id) as keywords
         FROM news n
+        JOIN votes v ON n.id = v.news_id
         JOIN sources s ON n.source_id = s.id
-        JOIN votes v ON v.news_id = n.id
         WHERE v.user_id = ?
         ORDER BY v.created_at DESC
-        LIMIT 50
+        LIMIT 100
     `).bind(user.id).all<NewsRow>();
 
-    const news = results ?? [];
     const html = renderPage(news, user, "투표한 기사");
     return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });
@@ -478,14 +366,13 @@ uiRouter.get("/user", async (request, env) => {
 uiRouter.get("/guidelines", async (request, env) => {
     const user = await getSessionUser(request, env);
     const content = `
-        <div class="static-content">
-            <h2>Community Guidelines</h2>
-            <p>Welcome to <strong>hy3n4 news</strong>! As this is an automated curation service in its MVP stage, our guidelines are simple:</p>
-            <ul>
-                <li>Be respectful in your voting. Do not attempt to game the system through automated means or bots.</li>
-                <li>We currently curate from established news sources (조선일보, 경향신문, 연합뉴스) to provide a variety of perspectives.</li>
-                <li>If you experience technical issues or want to suggest a new source, please use the Contact link in the footer.</li>
-                <li>Enjoy reading and sharing the news!</li>
+        <div style="padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+            <h2 style="border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 20px;">가이드라인</h2>
+            <p>하이에나뉴스는 공정한 뉴스 큐레이션을 지향합니다.</p>
+            <ul style="margin-top: 15px; padding-left: 20px;">
+                <li>중복된 내용은 시스템에 의해 자동으로 그룹화됩니다.</li>
+                <li>자극적인 제목보다는 팩트 중심의 기사를 우선합니다.</li>
+                <li>특정 정파에 치우치지 않는 다양한 시각을 제공하려 노력합니다.</li>
             </ul>
         </div>
     `;
@@ -496,13 +383,11 @@ uiRouter.get("/guidelines", async (request, env) => {
 uiRouter.get("/legal", async (request, env) => {
     const user = await getSessionUser(request, env);
     const content = `
-        <div class="static-content">
-            <h2>Legal Information</h2>
-            <h3>Terms of Service</h3>
-            <p>By using hy3n4 news, you agree that this is a hobbyist news aggregator provided "as is" without any warranties. The content and copyrights belong to their respective original publishers. We are not responsible for the accuracy of the aggregated content.</p>
-            
-            <h3>Privacy Policy</h3>
-            <p>We believe in minimal data collection. We use Google OAuth strictly for secure login purposes. We only store your Google ID, chosen username, and email to maintain your voting session. We do not track your activity across the web, nor do we sell your data to any third parties.</p>
+        <div style="padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.8;">
+            <h2 style="border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 20px;">법적고지</h2>
+            <p>본 서비스는 각 언론사가 제공하는 RSS 피드를 기반으로 링크를 제공하는 검색 서비스입니다.</p>
+            <p style="margin-top: 10px;">모든 기사의 저작권은 해당 언론사에 있으며, 기사 내용에 대한 책임 또한 각 언론사에 있습니다.</p>
+            <p style="margin-top: 10px;">본 서비스는 링크 제공 과정에서 어떠한 기사 내용도 변조하거나 직접 호스팅하지 않습니다.</p>
         </div>
     `;
     const html = renderHTML(content, user?.username);
@@ -513,18 +398,12 @@ uiRouter.get(/^\/go\/(\d+)$/, async (request, env, ctx, match) => {
     const newsId = parseInt(match![1], 10);
     const user = await getSessionUser(request, env);
 
-    const row = await env.DB.prepare(
-        "SELECT url FROM news WHERE id = ?"
-    ).bind(newsId).first<{ url: string }>();
+    const news = await env.DB.prepare("SELECT url FROM news WHERE id = ?").bind(newsId).first<{ url: string }>();
+    if (!news) return new Response("Not Found", { status: 404 });
 
-    if (!row) return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html" } });
+    // Track click (async)
+    ctx.waitUntil(env.DB.prepare("INSERT INTO clicks (user_id, news_id) VALUES (?, ?)").bind(user?.id || null, newsId).run());
+    ctx.waitUntil(env.DB.prepare("UPDATE news SET view_count = view_count + 1 WHERE id = ?").bind(newsId).run());
 
-    await env.DB.prepare(
-        "INSERT INTO clicks (user_id, news_id) VALUES (?, ?)"
-    ).bind(user?.id ?? null, newsId).run();
-    await env.DB.prepare(
-        "UPDATE news SET view_count = view_count + 1 WHERE id = ?"
-    ).bind(newsId).run();
-
-    return new Response(null, { status: 302, headers: { Location: row.url } });
+    return new Response(null, { status: 302, headers: { Location: news.url } });
 });

@@ -225,32 +225,6 @@ export const CSS_STYLES = `
       color: var(--bg);
     }
 
-    .tags-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .filter-tag {
-      text-decoration: none;
-      color: var(--secondary);
-      background: rgba(229, 166, 87, 0.15);
-      padding: 6px 12px;
-      border-radius: 12px;
-      font-size: 13px;
-      font-weight: bold;
-      transition: all 0.2s;
-    }
-
-    .filter-tag:hover {
-      background: rgba(229, 166, 87, 0.3);
-    }
-
-    .filter-tag.active {
-      background: var(--accent);
-      color: var(--bg);
-    }
-
     .app-container {
       max-width: 1420px;
       margin: 0 auto;
@@ -697,20 +671,20 @@ export const CSS_STYLES = `
     }
   `;
 
-export function renderHTML(content: string, user: string | null = null, currentLimit: number = 25, currentTime: number = 24, activeKeyword: string = '') {
+export function renderHTML(content: string, user: string | null = null, currentLimit: number = 25, currentTime: number = 24) {
   const authHtml = user
     ? `<div class="auth-area"><a href="/user" class="user-name">${user}</a> | <a href="/logout">로그아웃</a></div>`
     : `<div class="auth-area"><a href="/login">login</a></div>`;
 
   const limits = [5, 10, 15, 25];
-  const limitsHtml = limits.map(l =>
-    `<a href="/?limit=${l}&time=${currentTime}${activeKeyword ? '&keyword=' + encodeURIComponent(activeKeyword) : ''}" class="filter-btn ${l === currentLimit ? 'active' : ''}">${l}</a>`
-  ).join('');
+  const limitsHtml = `<!--limits-->${limits.map(l =>
+    `<a href="/?limit=${l}&time=${currentTime}" class="filter-btn ${l === currentLimit ? 'active' : ''}">${l}개</a>`
+  ).join('')}<!--/limits-->`;
 
   const times = [1, 3, 6, 12, 24];
-  const timesHtml = times.map(t =>
-    `<a href="/?limit=${currentLimit}&time=${t}${activeKeyword ? '&keyword=' + encodeURIComponent(activeKeyword) : ''}" class="filter-btn ${t === currentTime ? 'active' : ''}">${t}h</a>`
-  ).join('');
+  const timesHtml = `<!--times-->${times.map(t =>
+    `<a href="/?limit=${currentLimit}&time=${t}" class="filter-btn ${t === currentTime ? 'active' : ''}">${t}시간</a>`
+  ).join('')}<!--/times-->`;
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -912,7 +886,7 @@ export function renderNewsList(sourceName: string, news: any[]) {
   return html;
 }
 
-export function renderTopics(topics: any[], currentLimit: number = 25, currentTime: number = 24) {
+export function renderTopics(topics: any[]) {
   if (!topics || topics.length === 0) return '';
 
   let html = `<div class="hot-topics">

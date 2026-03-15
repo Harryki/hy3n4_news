@@ -1,7 +1,7 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { getRelativeTime } from "../../core/utils";
-import { renderHTML, renderNewsList, renderTopics, renderWideNewsList } from "./templates";
+import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults } from "./templates";
 
 export const uiRouter = new Router();
 
@@ -199,6 +199,80 @@ function getCookie(request: Request, name: string): string | null {
 }
 
 // --- Routes ---
+
+uiRouter.get("/search", async (request, env) => {
+    const url = new URL(request.url);
+    const q = url.searchParams.get("q")?.trim() || null;
+    const user = await getSessionUser(request, env);
+
+    let topics: any[] = [];
+    if (q) {
+        // Hybrid Search Logic (similar to api/search)
+        const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: [q] });
+        const vector = embedRes.data[0];
+        const semanticRes = await env.VECTORIZE.query(vector, { topK: 15, returnMetadata: "none" });
+        const semanticIds = semanticRes.matches
+            .filter((m: any) => m.score > 0.5)
+            .map((m: any) => parseInt(m.id, 10));
+
+        const semanticPlaceholders = semanticIds.length > 0 ? semanticIds.map(() => '?').join(',') : null;
+        const whereClause = semanticPlaceholders
+            ? `t.id IN (${semanticPlaceholders}) OR t.title LIKE ? OR t.keywords LIKE ?`
+            : `t.title LIKE ? OR t.keywords LIKE ?`;
+        const bindParams = semanticPlaceholders
+            ? [...semanticIds, `%${q}%`, `%${q}%`]
+            : [`%${q}%`, `%${q}%`];
+
+        const { results } = await env.DB.prepare(`
+            SELECT t.id, t.title, t.keywords, t.updated_at,
+                   (SELECT COUNT(*) FROM news_topics nt WHERE nt.topic_id = t.id) as article_count
+            FROM topics t
+            WHERE ${whereClause}
+            ORDER BY t.updated_at DESC
+            LIMIT 20
+        `).bind(...bindParams).all();
+        topics = results || [];
+    } else {
+        // Latest 10 Topics
+        const { results } = await env.DB.prepare(`
+            SELECT t.id, t.title, t.keywords, t.updated_at,
+                   (SELECT COUNT(*) FROM news_topics nt WHERE nt.topic_id = t.id) as article_count
+            FROM topics t
+            ORDER BY t.updated_at DESC
+            LIMIT 10
+        `).all();
+        topics = results || [];
+    }
+
+    const newsByTopic: Record<number, any[]> = {};
+    if (topics.length > 0) {
+        const topicIds = topics.map(t => t.id);
+        const placeholders = topicIds.map(() => '?').join(',');
+        const { results: news } = await env.DB.prepare(`
+            SELECT n.id, n.title, n.url, n.published_at, n.created_at, s.name as source_name, nt.topic_id
+            FROM news n
+            JOIN sources s ON n.source_id = s.id
+            JOIN news_topics nt ON n.id = nt.news_id
+            WHERE nt.topic_id IN (${placeholders})
+            ORDER BY n.published_at DESC
+        `).bind(...topicIds).all();
+
+        if (news) {
+            for (const item of news) {
+                const tid = item.topic_id as number;
+                if (!newsByTopic[tid]) newsByTopic[tid] = [];
+                if (newsByTopic[tid].length < 5) {
+                    newsByTopic[tid].push(item);
+                }
+            }
+        }
+    }
+
+    const content = renderSearchResults(q, topics, newsByTopic);
+    return new Response(renderHTML(content, user?.username || null), {
+        headers: { "Content-Type": "text/html; charset=utf-8" }
+    });
+});
 
 uiRouter.get("/", async (request, env) => {
     const url = new URL(request.url);

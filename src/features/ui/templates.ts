@@ -24,50 +24,159 @@ export const CSS_STYLES = `
     header {
       font-family: "Godo", "Inter", Arial, sans-serif;
       background: var(--border);
-      padding: 8px 12px;
+      padding: 12px 20px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
       border-bottom: 3px solid var(--accent);
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
     header h1 {
       font-weight: 400;
-      font-size: 18px;
+      font-size: 20px;
       color: var(--bg);
       letter-spacing: 1px;
       text-transform: uppercase;
+      margin: 0;
     }
 
-    header nav a {
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 12px;
-      font-weight: bold;
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    header nav a:hover {
-      text-decoration: underline;
-    }
-
-    .auth-area {
-      margin-left: auto;
-      font-size: 14px;
+    /* IconButton Style (Shadcn-like) */
+    .icon-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       color: var(--bg);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      height: 36px;
+      width: 36px;
     }
 
-    .auth-area a {
-      color: var(--accent);
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .icon-btn svg {
+      width: 20px;
+      height: 20px;
+      stroke: var(--bg);
+    }
+
+    /* Sidebar (Shadcn Sheet style) */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .sidebar-overlay.open {
+      display: block;
+      opacity: 1;
+    }
+
+    .sidebar {
+      position: fixed;
+      top: 0;
+      right: -300px;
+      width: 300px;
+      height: 100%;
+      background: var(--bg);
+      z-index: 2001;
+      box-shadow: -10px 0 25px rgba(0,0,0,0.1);
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+      border-left: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .sidebar.open {
+      right: 0;
+    }
+
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+    }
+
+    .sidebar-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .sidebar-close {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+    }
+
+    .sidebar-content {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sidebar-link {
+      padding: 12px 16px;
+      border-radius: 8px;
       text-decoration: none;
-      font-weight: bold;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 500;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    .auth-area a:hover {
-      text-decoration: underline;
+    .sidebar-link:hover {
+      background: rgba(0,0,0,0.05);
     }
 
-    .user-name {
-      color: var(--accent);
+    .sidebar-link.auth-btn {
+      margin-top: auto;
+      background: var(--border);
+      color: var(--bg);
+      justify-content: center;
+    }
+
+    .sidebar-link.auth-btn:hover {
+      background: #462a22;
+    }
+
+    .sidebar-divider {
+      height: 1px;
+      background: rgba(0,0,0,0.1);
+      margin: 16px 0;
     }
 
     .filters {
@@ -429,41 +538,7 @@ export const CSS_STYLES = `
     }
 
     /* Search */
-    .search-form {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-left: auto;
-      margin-right: 12px;
-    }
-
-    .search-form input[type="search"] {
-      font-family: 'Godo', Arial, serif;
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 8px;
-      padding: 5px 14px;
-      font-size: 13px;
-      color: var(--bg);
-      width: 240px;
-      outline: none;
-      transition: background 0.2s, border-color 0.2s;
-    }
-
-    .search-form input[type="search"]::placeholder {
-      color: rgba(249, 233, 218, 0.5);
-    }
-
-    .search-form input[type="search"]:focus {
-      background: rgba(255,255,255,0.2);
-      border-color: var(--accent);
-    }
-
-    @media (max-width: 640px) {
-      .search-form input[type="search"] { width: 160px; }
-    }
-
-    .search-form button {
+    .search-btn {
       background: rgba(255, 255, 255, 0.1);
       border: 1px solid rgba(255, 255, 255, 0.1);
       color: var(--bg);
@@ -474,140 +549,141 @@ export const CSS_STYLES = `
       align-items: center;
       justify-content: center;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      height: 28px;
-      width: 28px;
+      height: 32px;
+      width: 32px;
+      margin-left: auto;
+      margin-right: 12px;
     }
 
-    .search-form button:hover {
+    .search-btn:hover {
       background: rgba(255, 255, 255, 0.2);
       border-color: var(--accent);
     }
 
-    .search-form button:active {
-      transform: scale(0.95);
-    }
-
-    .search-form button svg {
-      width: 14px;
-      height: 14px;
+    .search-btn svg {
+      width: 18px;
+      height: 18px;
       stroke: var(--accent);
     }
 
-    .search-form input[type="search"]:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      background: rgba(255,255,255,0.05);
-    }
-
-    .search-form button:disabled {
-      opacity: 0.8;
-      cursor: not-allowed;
-      border-color: rgba(255, 255, 255, 0.1);
-    }
-
-    .search-form .htmx-indicator {
+    /* Modal */
+    .modal-overlay {
       display: none;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: var(--accent);
-      animation: spin 1s ease-in-out infinite;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 100px;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .modal-content {
+      background: var(--bg);
+      width: 90%;
+      max-width: 600px;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      border: 1px solid var(--accent);
     }
 
-    .search-form.htmx-request button svg {
-      display: none;
+    .modal-search-form {
+      display: flex;
+      gap: 12px;
     }
 
-    .search-form.htmx-request .htmx-indicator {
-      display: inline-block;
+    .modal-search-form input {
+      flex: 1;
+      font-family: 'Godo', Arial, serif;
+      background: rgba(87, 53, 43, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 16px;
+      color: var(--text);
+      outline: none;
+    }
+
+    .modal-search-form input:focus {
+      border-color: var(--accent);
+    }
+
+    .modal-search-form button {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      padding: 0 20px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
     }
 
     .search-results-container {
       background: var(--bg);
-      border-bottom: 2px solid var(--accent);
-      padding: 0 20px 20px;
+      padding: 0 20px 40px;
       max-width: 800px;
       margin: 0 auto;
     }
 
     .search-results-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 0 12px;
-      border-bottom: 1px solid rgba(87, 53, 43, 0.2);
-      font-size: 14px;
-      color: var(--secondary);
+      margin-bottom: 24px;
+      border-bottom: 2px solid var(--accent);
+      padding: 20px 0 12px;
+      color: var(--border);
     }
-
-    .search-close-btn {
-      background: none;
-      border: 1px solid rgba(87, 53, 43, 0.3);
-      border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      cursor: pointer;
-      font-size: 14px;
-      color: var(--secondary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-
-    .search-close-btn:hover {
-      background: rgba(87, 53, 43, 0.1);
+    
+    .search-results-header h2 {
+      font-size: 22px;
+      font-weight: bold;
     }
 
     .search-topic-group {
-      padding: 14px 0;
-      border-bottom: 1px dashed rgba(87, 53, 43, 0.15);
-    }
-
-    .search-topic-group:last-child {
-      border-bottom: none;
+      margin-bottom: 40px;
     }
 
     .search-topic-title {
-      font-size: 15px;
+      font-size: 20px;
       font-weight: bold;
       color: var(--text);
       text-decoration: none;
+      display: block;
+      margin-bottom: 4px;
     }
 
     .search-topic-title:hover {
-      text-decoration: underline;
       color: var(--accent);
     }
 
     .search-topic-keywords {
-      font-size: 11px;
+      font-size: 13px;
       color: var(--accent);
-      margin-left: 8px;
+      margin-top: 4px;
+      font-weight: 500;
     }
 
     .search-news-list {
       list-style: none;
       padding: 0;
-      margin: 8px 0 0 24px;
-      border-left: 2px solid rgba(87, 53, 43, 0.1);
-      padding-left: 12px;
+      margin-top: 16px;
+      border-left: 3px solid rgba(229, 166, 87, 0.3);
+      padding-left: 16px;
     }
 
     .search-news-list li {
-      padding: 4px 0;
-      font-size: 13px;
+      margin-bottom: 12px;
     }
-
 
     .search-news-link {
       color: var(--text);
       text-decoration: none;
+      font-size: 15px;
+      display: block;
+      line-height: 1.4;
     }
 
     .search-news-link:hover {
@@ -615,8 +691,9 @@ export const CSS_STYLES = `
     }
 
     .search-news-meta {
-      font-size: 11px;
+      font-size: 12px;
       color: #828282;
+      margin-top: 2px;
     }
   `;
 
@@ -698,21 +775,102 @@ export function renderHTML(content: string, user: string | null = null, currentL
   <div class="app-container">
     <header>
       <h1><a href="/" style="color: var(--bg); text-decoration: none;">하이에나뉴스</a></h1>
-      <nav>
-      </nav>
-      <form class="search-form" hx-get="/api/search" hx-target="#search-results" hx-swap="innerHTML" hx-indicator="this" hx-disabled-elt="this, find input, find button">
-        <input type="search" name="q" placeholder="토픽을 검색해보세용" autocomplete="off" />
-        <button type="submit">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <span class="htmx-indicator"></span>
+      <div class="header-right">
+        <button id="search-open-btn" class="icon-btn" title="검색">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         </button>
-      </form>
-      ${authHtml}
+        <button id="sidebar-open-btn" class="icon-btn" title="메뉴">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+        </button>
+      </div>
     </header>
+
     <main>
-      <div id="search-results"></div>
       ${content}
     </main>
+
+    <div id="search-modal" class="modal-overlay">
+      <div class="modal-content">
+        <form class="modal-search-form" action="/search" method="GET">
+          <input type="text" name="q" placeholder="토픽을 검색해보세용" autocomplete="off" autofocus />
+          <button type="submit">검색</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Sidebar (Shadcn Sheet) -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h2>Menu</h2>
+        <button id="sidebar-close-btn" class="sidebar-close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="sidebar-content">
+        ${user ? `<div style="padding: 0 16px 16px; font-size: 14px; color: var(--secondary);">반가워요, <strong style="color: var(--border);">${user}</strong>님!</div>` : ''}
+        <a href="/" class="sidebar-link">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Home
+        </a>
+        <div class="sidebar-divider"></div>
+        <a href="/guidelines" class="sidebar-link">가이드라인 (Guidelines)</a>
+        <a href="/legal" class="sidebar-link">법적고지 (Legal)</a>
+        <a href="mailto:hy3n4news@gmail.com" class="sidebar-link">Contact</a>
+        
+        <div style="margin-top: auto;">
+          ${user 
+            ? `<a href="/logout" class="sidebar-link auth-btn">로그아웃</a>` 
+            : `<a href="/login" class="sidebar-link auth-btn">로그인 / 시작하기</a>`
+          }
+        </div>
+      </div>
+    </aside>
+
+    <script>
+      // Search Modal
+      const modal = document.getElementById('search-modal');
+      const openBtn = document.getElementById('search-open-btn');
+      const searchInput = modal.querySelector('input');
+
+      openBtn.onclick = () => {
+        modal.style.display = 'flex';
+        searchInput.focus();
+      };
+
+      modal.onclick = (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+      };
+
+      // Sidebar
+      const sidebar = document.getElementById('sidebar');
+      const sidebarOverlay = document.getElementById('sidebar-overlay');
+      const sidebarOpenBtn = document.getElementById('sidebar-open-btn');
+      const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+
+      const toggleSidebar = (open) => {
+        if (open) {
+          sidebarOverlay.classList.add('open');
+          sidebar.classList.add('open');
+          document.body.style.overflow = 'hidden';
+        } else {
+          sidebarOverlay.classList.remove('open');
+          sidebar.classList.remove('open');
+          document.body.style.overflow = '';
+        }
+      };
+
+      sidebarOpenBtn.onclick = () => toggleSidebar(true);
+      sidebarCloseBtn.onclick = () => toggleSidebar(false);
+      sidebarOverlay.onclick = () => toggleSidebar(false);
+
+      window.onkeydown = (e) => {
+        if (e.key === 'Escape') {
+          modal.style.display = 'none';
+          toggleSidebar(false);
+        }
+      };
+    </script>
     <footer>
       <a href="/guidelines">가이드라인 (Guidelines)</a> | <a href="/legal">법적고지 (Legal)</a> | <a href="mailto:hy3n4news@gmail.com">Contact</a>
     </footer>
@@ -773,6 +931,49 @@ export function renderTopics(topics: any[], currentLimit: number = 25, currentTi
 
   html += `</div></div>`;
   return html;
+}
+
+function escapeHtml(str: string): string {
+    return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export function renderSearchResults(query: string | null, topics: any[], newsByTopic: Record<number, any[]>): string {
+    let html = '<div class="search-results-container">';
+    
+    if (query) {
+        html += `<div class="search-results-header"><h2>"<strong>${escapeHtml(query)}</strong>" 검색 결과</h2></div>`;
+    } else {
+        html += `<div class="search-results-header"><h2>최신 업데이트 토픽</h2></div>`;
+    }
+
+    if (topics.length === 0) {
+        html += `<p style="padding: 40px; text-align: center; color: var(--secondary);">결과가 없습니다.</p>`;
+    } else {
+        for (const topic of topics) {
+            const topicNews = newsByTopic[topic.id] || [];
+            const timeStr = topic.updated_at ? getRelativeTime(topic.updated_at, topic.updated_at) : '';
+            const countStr = topic.article_count ? `(기사 ${topic.article_count}개) · ` : '';
+
+            html += `
+                <div class="search-topic-group">
+                    <a href="/topic/${topic.id}" class="search-topic-title">${escapeHtml(topic.title)}</a>
+                    <div class="search-news-meta">${countStr}마지막 업데이트: ${timeStr}</div>
+                    ${topic.keywords ? `<div class="search-topic-keywords">#${topic.keywords.split(',').map((k: any) => k.trim()).join(' #')}</div>` : ''}
+                    <ul class="search-news-list">
+                        ${topicNews.map((n: any) => `
+                            <li>
+                                <a href="/go/${n.id}" target="_blank" class="search-news-link">${escapeHtml(n.title)}</a>
+                                <div class="search-news-meta">${n.source_name} · ${getRelativeTime(n.published_at, n.created_at)}</div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    }
+    
+    html += '</div>';
+    return html;
 }
 
 export function renderWideNewsList(news: any[]) {

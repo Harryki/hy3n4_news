@@ -66,8 +66,11 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
 
                     topicsToCheck.add(topicId);
                 } catch (e: any) {
-                    // Ignore unique constraint violations
-                    console.error(`[QUEUE] UPDATE topics error ${topicId}:`, e.message);
+                    // Log more detail for debugging foreign key issues
+                    console.error(`[QUEUE] CLUSTER topics error (News: ${item.id}, Topic: ${topicId}):`, e.message);
+                    if (e.message.includes("FOREIGN KEY")) {
+                        console.error(`[QUEUE] DEBUG: Check if Topic ${topicId} or News ${item.id} exists in DB.`);
+                    }
                 }
             }
 
@@ -89,10 +92,10 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
                     }]);
                     newTopicCount++;
                 } catch (e: any) {
-                    console.error(`[QUEUE] NEW topics error ${newTopic.id}:`, e.message);
-                    console.log(`[QUEUE] DEBUG: unclustered length ${unclustered.length}, index: ${i}, newTopic: ${newTopic}`); 
-                    throw e
+                    console.error(`[QUEUE] NEW topic error (News: ${item.id}, Topic: ${newTopic.id}):`, e.message);
+                    throw e;
                 }
+
             }
         }
     }

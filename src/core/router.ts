@@ -36,12 +36,16 @@ export class Router {
         const url = new URL(request.url);
 
         // Global rate limiting
+        // console.log(JSON.stringify(env.RATE_LIMITER))
         if (env.RATE_LIMITER) {
             const ip = request.headers.get("cf-connecting-ip") || "unknown";
             const segment = url.pathname.split("/")[1] || "root";
             const key = `${ip}:${segment}`;
-            const { success } = await env.RATE_LIMITER.limit({ key });
-            if (!success) {
+            // console.log(key)
+            // const { success } = await env.RATE_LIMITER.limit({ key });
+            const result = await env.RATE_LIMITER.limit({ key })
+            // console.log("rate limit result:", JSON.stringify(result));
+            if (!result.success) {
                 return new Response("Too Many Requests", { status: 429 });
             }
         }

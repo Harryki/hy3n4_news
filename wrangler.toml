@@ -80,3 +80,12 @@ queue = "news-processing-queue"
 max_batch_size = 50
 max_batch_timeout = 5
 max_concurrency = 1
+
+[[env.production.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1002"
+
+[env.production.ratelimits.simple]
+limit = 3
+period = 10
+

@@ -36,6 +36,14 @@ binding = "DB"
 database_name = "news-db-dev"
 database_id = "95f0dd23-71ed-405c-98ee-811b69604541"
 
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+
+[ratelimits.simple]
+limit = 15
+period = 10
+
 [vars]
 GOOGLE_CLIENT_ID = "5439287092-mfrbcjgop304q6d8693avajaagc8gk87.apps.googleusercontent.com"
 

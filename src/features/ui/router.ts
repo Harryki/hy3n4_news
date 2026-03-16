@@ -249,6 +249,7 @@ uiRouter.get("/search", async (request, env) => {
 
 uiRouter.get("/", async (request, env) => {
     const url = new URL(request.url);
+
     const user = await getSessionUser(request, env);
 
     const queryPage = url.searchParams.get("page");

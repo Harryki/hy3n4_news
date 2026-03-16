@@ -35,6 +35,17 @@ export class Router {
     public async handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const url = new URL(request.url);
 
+        // Global rate limiting
+        if (env.RATE_LIMITER) {
+            const ip = request.headers.get("cf-connecting-ip") || "unknown";
+            const segment = url.pathname.split("/")[1] || "root";
+            const key = `${ip}:${segment}`;
+            const { success } = await env.RATE_LIMITER.limit({ key });
+            if (!success) {
+                return new Response("Too Many Requests", { status: 429 });
+            }
+        }
+
         for (const route of this.routes) {
             if (route.method === request.method || route.method === "ANY") {
                 if (typeof route.pattern === "string") {

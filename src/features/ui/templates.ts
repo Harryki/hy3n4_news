@@ -744,6 +744,15 @@ export function renderHTML(content: string, user: string | null = null, currentL
     }
 
   </style>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-214JZWY0K5"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-214JZWY0K5');
+  </script>
 </head>
 <body>
   <script>
@@ -798,10 +807,10 @@ export function renderHTML(content: string, user: string | null = null, currentL
         <a href="mailto:hy3n4news@gmail.com" class="sidebar-link">Contact</a>
         
         <div style="margin-top: auto;">
-          ${user 
-            ? `<a href="/logout" class="sidebar-link auth-btn">로그아웃</a>` 
-            : `<a href="/login" class="sidebar-link auth-btn">로그인 / 시작하기</a>`
-          }
+          ${user
+      ? `<a href="/logout" class="sidebar-link auth-btn">로그아웃</a>`
+      : `<a href="/login" class="sidebar-link auth-btn">로그인 / 시작하기</a>`
+    }
         </div>
       </div>
     </aside>
@@ -913,27 +922,27 @@ export function renderTopics(topics: any[]) {
 }
 
 function escapeHtml(str: string): string {
-    return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export function renderSearchResults(query: string | null, topics: any[], newsByTopic: Record<number, any[]>, page: number = 1, hasMore: boolean = false): string {
-    let html = '<div class="search-results-container">';
-    
-    if (query) {
-        html += `<div class="search-results-header"><h2>"<strong>${escapeHtml(query)}</strong>" 검색 결과</h2></div>`;
-    } else {
-        html += `<div class="search-results-header"><h2>최신 업데이트 토픽</h2></div>`;
-    }
+  let html = '<div class="search-results-container">';
 
-    if (topics.length === 0) {
-        html += `<p style="padding: 40px; text-align: center; color: var(--secondary);">결과가 없습니다.</p>`;
-    } else {
-        for (const topic of topics) {
-            const topicNews = newsByTopic[topic.id] || [];
-            const timeStr = topic.updated_at ? getRelativeTime(topic.updated_at, topic.updated_at) : '';
-            const countStr = topic.article_count ? `(기사 ${topic.article_count}개) · ` : '';
+  if (query) {
+    html += `<div class="search-results-header"><h2>"<strong>${escapeHtml(query)}</strong>" 검색 결과</h2></div>`;
+  } else {
+    html += `<div class="search-results-header"><h2>최신 업데이트 토픽</h2></div>`;
+  }
 
-            html += `
+  if (topics.length === 0) {
+    html += `<p style="padding: 40px; text-align: center; color: var(--secondary);">결과가 없습니다.</p>`;
+  } else {
+    for (const topic of topics) {
+      const topicNews = newsByTopic[topic.id] || [];
+      const timeStr = topic.updated_at ? getRelativeTime(topic.updated_at, topic.updated_at) : '';
+      const countStr = topic.article_count ? `(기사 ${topic.article_count}개) · ` : '';
+
+      html += `
                 <div class="search-topic-group">
                     <a href="/topic/${topic.id}" class="search-topic-title">${escapeHtml(topic.title)}</a>
                     <div class="search-news-meta">${countStr}마지막 업데이트: ${timeStr}</div>
@@ -948,14 +957,14 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
                     </ul>
                 </div>
             `;
-        }
+    }
 
-        if (hasMore) {
-            const nextLink = query 
-                ? `/search?q=${encodeURIComponent(query)}&page=${page + 1}`
-                : `/search?page=${page + 1}`;
-            
-            html += `
+    if (hasMore) {
+      const nextLink = query
+        ? `/search?q=${encodeURIComponent(query)}&page=${page + 1}`
+        : `/search?page=${page + 1}`;
+
+      html += `
                 <div style="text-align: center; padding: 20px; border-top: 1px solid var(--border); margin-top: 20px;">
                     <a href="${nextLink}" 
                        style="display: inline-block; padding: 10px 24px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 24px; font-weight: bold; font-size: 15px; transition: opacity 0.2s;">
@@ -963,11 +972,11 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
                     </a>
                 </div>
             `;
-        }
     }
-    
-    html += '</div>';
-    return html;
+  }
+
+  html += '</div>';
+  return html;
 }
 
 export function renderWideNewsList(news: any[]) {

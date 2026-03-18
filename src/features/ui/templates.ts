@@ -967,6 +967,7 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
       html += `
                 <div style="text-align: center; padding: 20px; border-top: 1px solid var(--border); margin-top: 20px;">
                     <a href="${nextLink}" 
+                       rel="nofollow"
                        style="display: inline-block; padding: 10px 24px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 24px; font-weight: bold; font-size: 15px; transition: opacity 0.2s;">
                        토픽 더 보기
                     </a>

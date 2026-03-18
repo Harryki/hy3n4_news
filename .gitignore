@@ -3,3 +3,4 @@ node_modules/
 dist/
 .dev.vars
 plan.md
+test_rate_limit.sh

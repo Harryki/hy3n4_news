@@ -91,7 +91,7 @@ export function renderPage(
 
         if (topicId && news.length === 50) {
             content += `<div style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
-                <a href="/topic/${topicId}?page=${page + 1}" 
+                <a href="/topic/${topicId}?page=${page + 1}" rel="nofollow" 
                    style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold;">
                    더 보기
                 </a>
@@ -145,7 +145,7 @@ export function renderPage(
 
     if (Array.isArray(news) && news.length >= currentLimit) {
         content += `<div style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
-            <a href="/?page=${page + 1}&limit=${currentLimit}&time=${currentTime}" 
+            <a href="/?page=${page + 1}&limit=${currentLimit}&time=${currentTime}" rel="nofollow" 
                style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold;">
                더 보기
             </a>

@@ -44,7 +44,7 @@ function renderTopicGroups(topics: any[], newsByTopic: Record<number, any[]>): s
 
 function renderLoadMoreButton(query: string, nextPage: number): string {
     return `<div id="search-load-more" style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
-        <a hx-get="/api/search?q=${encodeURIComponent(query)}&page=${nextPage}" hx-target="#search-load-more" hx-swap="outerHTML"
+        <a hx-get="/api/search?q=${encodeURIComponent(query)}&page=${nextPage}" hx-target="#search-load-more" hx-swap="outerHTML" rel="nofollow"
            style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold; cursor: pointer;">
            더 보기
         </a>

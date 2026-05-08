@@ -46,6 +46,8 @@ period = 10
 
 [vars]
 GOOGLE_CLIENT_ID = "5439287092-mfrbcjgop304q6d8693avajaagc8gk87.apps.googleusercontent.com"
+EMBEDDING_MODEL = "@cf/baai/bge-m3"
+LLM_MODEL = "@cf/google/gemma-3-12b-it"
 
 [env.production]
 routes = [
@@ -58,6 +60,8 @@ crons = ["*/30 * * * *"]
 
 [env.production.vars]
 GOOGLE_CLIENT_ID = "5439287092-mfrbcjgop304q6d8693avajaagc8gk87.apps.googleusercontent.com"
+EMBEDDING_MODEL = "@cf/baai/bge-m3"
+LLM_MODEL = "@cf/google/gemma-3-12b-it"
 
 [[env.production.d1_databases]]
 binding = "DB"

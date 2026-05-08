@@ -6,6 +6,8 @@ export interface Env {
   VECTORIZE: any;
   NEWS_PROCESSING_QUEUE: Queue<any>;
   RATE_LIMITER?: { limit: (opts: { key: string }) => Promise<{ success: boolean }> };
+  EMBEDDING_MODEL: string;
+  LLM_MODEL: string;
 }
 
 interface GoogleTokenResponse {

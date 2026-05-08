@@ -37,7 +37,7 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
   const EMBED_CHUNK_SIZE = 10;
   for (let i = 0; i < textsToEmbed.length; i += EMBED_CHUNK_SIZE) {
     const chunk = textsToEmbed.slice(i, i + EMBED_CHUNK_SIZE);
-    const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: chunk });
+    const embedRes = await env.AI.run(env.EMBEDDING_MODEL, { text: chunk });
     vectors = vectors.concat(embedRes.data);
   }
 
@@ -121,7 +121,7 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
 
       for (const topic of topicsToSummarize) {
         try {
-          const aiResponse = await env.AI.run("@cf/google/gemma-3-12b-it", {
+          const aiResponse = await env.AI.run(env.LLM_MODEL, {
             messages: [
               {
                 role: "system",

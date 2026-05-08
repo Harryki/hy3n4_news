@@ -97,7 +97,7 @@ aiRouter.get("/api/search", async (request, env) => {
   const offset = (page - 1) * PAGE_SIZE;
 
   // 1. Embed query for semantic search
-  const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: [q] });
+  const embedRes = await env.AI.run(env.EMBEDDING_MODEL, { text: [q] });
   const vector = embedRes.data[0];
 
   // 2. Vectorize semantic search
@@ -217,7 +217,7 @@ aiRouter.get(/^\/debug\/vector/, async (request, env) => {
 
   if (!q) return new Response("Provide ?q=TEXT to query vectorize", { status: 400 });
 
-  const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: [q] });
+  const embedRes = await env.AI.run(env.EMBEDDING_MODEL, { text: [q] });
   const vector = embedRes.data[0];
 
   const searchRes = await env.VECTORIZE.query(vector, { topK: 10 });

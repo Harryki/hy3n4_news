@@ -176,7 +176,7 @@ uiRouter.get("/search", async (request, env) => {
 
   if (q) {
     // Hybrid Search Logic (similar to api/search)
-    const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: [q] });
+    const embedRes = await env.AI.run(env.EMBEDDING_MODEL, { text: [q] });
     const vector = embedRes.data[0];
     const semanticRes = await env.VECTORIZE.query(vector, { topK: 15, returnMetadata: "none" });
     const semanticIds = semanticRes.matches

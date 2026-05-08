@@ -1,112 +1,112 @@
 import { Env } from "../../auth";
 
 export async function processNewsQueue(messages: any[], env: Env): Promise<void> {
-    console.log(`[QUEUE] Received batch of ${messages.length} messages`);
+  console.log(`[QUEUE] Received batch of ${messages.length} messages`);
 
-    // const newsIds = messages.map(m => m.body?.news_id).filter(id => id !== undefined);
-    const newsIds = messages.flatMap(m => m.body?.news_ids ?? []).filter((id): id is number => typeof id === 'number');
-    console.log(`[QUEUE] Total newsIds after flatten: ${newsIds.length}`);
+  // const newsIds = messages.map(m => m.body?.news_id).filter(id => id !== undefined);
+  const newsIds = messages.flatMap(m => m.body?.news_ids ?? []).filter((id): id is number => typeof id === 'number');
+  console.log(`[QUEUE] Total newsIds after flatten: ${newsIds.length}`);
 
-    if (newsIds.length === 0) return;
+  if (newsIds.length === 0) return;
 
-    const BATCH_SIZE = 100;
-    const unclustered = [];
-    for (let i = 0; i < newsIds.length; i += BATCH_SIZE) {
-        const batch = newsIds.slice(i, i + BATCH_SIZE);
-        const placeholders = batch.map(() => "?").join(",");
-        const { results } = await env.DB.prepare(`
+  const BATCH_SIZE = 100;
+  const unclustered = [];
+  for (let i = 0; i < newsIds.length; i += BATCH_SIZE) {
+    const batch = newsIds.slice(i, i + BATCH_SIZE);
+    const placeholders = batch.map(() => "?").join(",");
+    const { results } = await env.DB.prepare(`
         SELECT id, title, description
         FROM news
         WHERE id IN (${placeholders})
         `).bind(...batch).all();
-        unclustered.push(...results);
-    }
-    if (!unclustered || unclustered.length === 0) return;
+    unclustered.push(...results);
+  }
+  if (!unclustered || unclustered.length === 0) return;
 
-    console.log(`[QUEUE] Processing ${unclustered.length} articles for clustering...`);
-    let clusteredCount = 0;
-    let newTopicCount = 0;
-    const topicsToCheck = new Set<number>();
+  console.log(`[QUEUE] Processing ${unclustered.length} articles for clustering...`);
+  let clusteredCount = 0;
+  let newTopicCount = 0;
+  const topicsToCheck = new Set<number>();
 
-    // 1. Generate Embeddings (in smaller chunks to avoid Network Connection Lost)
-    const textsToEmbed = unclustered.map(item =>
-        `${item.title} ${item.description || ""}`.substring(0, 1000)
-    );
+  // 1. Generate Embeddings (in smaller chunks to avoid Network Connection Lost)
+  const textsToEmbed = unclustered.map(item =>
+    `${item.title} ${item.description || ""}`.substring(0, 1000)
+  );
 
-    let vectors: any[] = [];
-    const EMBED_CHUNK_SIZE = 10;
-    for (let i = 0; i < textsToEmbed.length; i += EMBED_CHUNK_SIZE) {
-        const chunk = textsToEmbed.slice(i, i + EMBED_CHUNK_SIZE);
-        const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: chunk });
-        vectors = vectors.concat(embedRes.data);
-    }
+  let vectors: any[] = [];
+  const EMBED_CHUNK_SIZE = 10;
+  for (let i = 0; i < textsToEmbed.length; i += EMBED_CHUNK_SIZE) {
+    const chunk = textsToEmbed.slice(i, i + EMBED_CHUNK_SIZE);
+    const embedRes = await env.AI.run("@cf/baai/bge-m3", { text: chunk });
+    vectors = vectors.concat(embedRes.data);
+  }
 
-    // 2. Process each item (Clustering)
-    for (let i = 0; i < unclustered.length; i++) {
-        const item = unclustered[i];
-        const vector = vectors[i];
+  // 2. Process each item (Clustering)
+  for (let i = 0; i < unclustered.length; i++) {
+    const item = unclustered[i];
+    const vector = vectors[i];
 
-        // Search Vectorize
-        const searchRes = await env.VECTORIZE.query(vector, { topK: 3 });
-        const matches = searchRes.matches.filter((m: any) => m.score > 0.65);
+    // Search Vectorize
+    const searchRes = await env.VECTORIZE.query(vector, { topK: 3 });
+    const matches = searchRes.matches.filter((m: any) => m.score > 0.65);
 
-        if (matches.length > 0) {
-            // Map to existing topics
-            for (const match of matches) {
-                const topicId = parseInt(match.id, 10);
-                try {
-                    await env.DB.prepare(
-                        "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
-                    ).bind(item.id, topicId, match.score).run();
+    if (matches.length > 0) {
+      // Map to existing topics
+      for (const match of matches) {
+        const topicId = parseInt(match.id, 10);
+        try {
+          await env.DB.prepare(
+            "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
+          ).bind(item.id, topicId, match.score).run();
 
-                    await env.DB.prepare(
-                        "UPDATE topics SET updated_at = datetime('now') WHERE id = ?"
-                    ).bind(topicId).run();
-                    clusteredCount++;
+          await env.DB.prepare(
+            "UPDATE topics SET updated_at = datetime('now') WHERE id = ?"
+          ).bind(topicId).run();
+          clusteredCount++;
 
-                    topicsToCheck.add(topicId);
-                } catch (e: any) {
-                    // Log more detail for debugging foreign key issues
-                    console.error(`[QUEUE] CLUSTER topics error (News: ${item.id}, Topic: ${topicId}):`, e.message);
-                    if (e.message.includes("FOREIGN KEY")) {
-                        console.error(`[QUEUE] DEBUG: Check if Topic ${topicId} or News ${item.id} exists in DB.`);
-                    }
-                }
-            }
-
-        } else {
-            // Create new topic
-            const newTopic = await env.DB.prepare(
-                "INSERT INTO topics (title) VALUES (?) RETURNING id"
-            ).bind(item.title).first<{ id: number }>();
-
-            if (newTopic) {
-                try {
-                    await env.DB.prepare(
-                        "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
-                    ).bind(item.id, newTopic.id, 1.0).run();
-
-                    await env.VECTORIZE.insert([{
-                        id: newTopic.id.toString(),
-                        values: vector
-                    }]);
-                    newTopicCount++;
-                } catch (e: any) {
-                    console.error(`[QUEUE] NEW topic error (News: ${item.id}, Topic: ${newTopic.id}):`, e.message);
-                    throw e;
-                }
-
-            }
+          topicsToCheck.add(topicId);
+        } catch (e: any) {
+          // Log more detail for debugging foreign key issues
+          console.error(`[QUEUE] CLUSTER topics error (News: ${item.id}, Topic: ${topicId}):`, e.message);
+          if (e.message.includes("FOREIGN KEY")) {
+            console.error(`[QUEUE] DEBUG: Check if Topic ${topicId} or News ${item.id} exists in DB.`);
+          }
         }
+      }
+
+    } else {
+      // Create new topic
+      const newTopic = await env.DB.prepare(
+        "INSERT INTO topics (title) VALUES (?) RETURNING id"
+      ).bind(item.title).first<{ id: number }>();
+
+      if (newTopic) {
+        try {
+          await env.DB.prepare(
+            "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
+          ).bind(item.id, newTopic.id, 1.0).run();
+
+          await env.VECTORIZE.insert([{
+            id: newTopic.id.toString(),
+            values: vector
+          }]);
+          newTopicCount++;
+        } catch (e: any) {
+          console.error(`[QUEUE] NEW topic error (News: ${item.id}, Topic: ${newTopic.id}):`, e.message);
+          throw e;
+        }
+
+      }
     }
+  }
 
-    console.log(`[QUEUE] Clustering complete. Mapped: ${clusteredCount}, New topics: ${newTopicCount}`);
+  console.log(`[QUEUE] Clustering complete. Mapped: ${clusteredCount}, New topics: ${newTopicCount}`);
 
-    // 3. Summarize newly formed clusters
-    if (topicsToCheck.size > 0) {
-        const topicIdList = Array.from(topicsToCheck);
-        const topicPlaceholders = topicIdList.map(() => "?").join(",");
-        const { results: topicsToSummarize } = await env.DB.prepare(`
+  // 3. Summarize newly formed clusters
+  if (topicsToCheck.size > 0) {
+    const topicIdList = Array.from(topicsToCheck);
+    const topicPlaceholders = topicIdList.map(() => "?").join(",");
+    const { results: topicsToSummarize } = await env.DB.prepare(`
             SELECT t.id, group_concat(n.title, ' || ') as titles
             FROM topics t
             JOIN news_topics nt ON t.id = nt.topic_id
@@ -116,20 +116,20 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
             HAVING count(n.id) >= 2
         `).bind(...topicIdList).all<{ id: number, titles: string }>();
 
-        if (topicsToSummarize && topicsToSummarize.length > 0) {
-            console.log(`[QUEUE] Found ${topicsToSummarize.length} topics to summarize.`);
+    if (topicsToSummarize && topicsToSummarize.length > 0) {
+      console.log(`[QUEUE] Found ${topicsToSummarize.length} topics to summarize.`);
 
-            for (const topic of topicsToSummarize) {
-                try {
-                    const aiResponse = await env.AI.run("@cf/google/gemma-3-12b-it", {
-                        messages: [
-                            {
-                                role: "system",
-                                content: "You are a professional Korean news editor. You must respond ONLY with a JSON object."
-                            },
-                            {
-                                role: "user",
-                                content: `Read the following news titles and provide a unified title (under 20 Korean chars) and 3 keywords.
+      for (const topic of topicsToSummarize) {
+        try {
+          const aiResponse = await env.AI.run("@cf/google/gemma-3-12b-it", {
+            messages: [
+              {
+                role: "system",
+                content: "You are a professional Korean news editor. You must respond ONLY with a JSON object."
+              },
+              {
+                role: "user",
+                content: `Read the following news titles and provide a unified title (under 20 Korean chars) and 3 keywords.
 
 News titles:
 ${topic.titles}
@@ -139,41 +139,41 @@ Output format:
 "title": "...",
 "keywords": "..."
 }`
-                            }
-                        ],
-                        max_tokens: 512
-                    }) as { response: string };
+              }
+            ],
+            max_tokens: 512
+          }) as { response: string };
 
-                    if (aiResponse?.response) {
-                        try {
-                            const rawContent = aiResponse.response.trim();
-                            const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+          if (aiResponse?.response) {
+            try {
+              const rawContent = aiResponse.response.trim();
+              const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
 
-                            if (jsonMatch) {
-                                const parsed = JSON.parse(jsonMatch[0]);
+              if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
 
-                                if (parsed.title && parsed.keywords) {
-                                    const keywordString = Array.isArray(parsed.keywords)
-                                        ? parsed.keywords.join(", ")
-                                        : parsed.keywords;
+                if (parsed.title && parsed.keywords) {
+                  const keywordString = Array.isArray(parsed.keywords)
+                    ? parsed.keywords.join(", ")
+                    : parsed.keywords;
 
-                                    await env.DB.prepare("UPDATE topics SET title = ?, keywords = ? WHERE id = ?")
-                                        .bind(parsed.title, keywordString, topic.id).run();
+                  await env.DB.prepare("UPDATE topics SET title = ?, keywords = ? WHERE id = ?")
+                    .bind(parsed.title, keywordString, topic.id).run();
 
-                                    console.log(`[QUEUE] Topic ${topic.id} summarized: ${parsed.title}`);
-                                }
-                            } else {
-                                throw new Error("No JSON object found in response");
-                            }
-                        } catch (e: any) {
-                            console.error(`[QUEUE] Parse failed for topic ${topic.id}:`, e.message);
-                            console.error(`[DEBUG] Raw AI output was: ${aiResponse.response}`);
-                        }
-                    }
-                } catch (e: any) {
-                    console.error(`[QUEUE] AI Error for topic ${topic.id}:`, e.message);
+                  console.log(`[QUEUE] Topic ${topic.id} summarized: ${parsed.title}`);
                 }
+              } else {
+                throw new Error("No JSON object found in response");
+              }
+            } catch (e: any) {
+              console.error(`[QUEUE] Parse failed for topic ${topic.id}:`, e.message);
+              console.error(`[DEBUG] Raw AI output was: ${aiResponse.response}`);
             }
+          }
+        } catch (e: any) {
+          console.error(`[QUEUE] AI Error for topic ${topic.id}:`, e.message);
         }
+      }
     }
+  }
 }

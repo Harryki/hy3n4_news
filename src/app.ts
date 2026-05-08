@@ -9,27 +9,27 @@ export const app = new Router();
 
 // SEO: robots.txt
 app.get("/robots.txt", () => {
-    return new Response(
-        `User-agent: *
+  return new Response(
+    `User-agent: *
 Allow: /
 Disallow: /go/
 Disallow: /auth/
 Sitemap: https://hy3n4.news/sitemap.xml`,
-        { headers: { "Content-Type": "text/plain" } }
-    );
+    { headers: { "Content-Type": "text/plain" } }
+  );
 });
 
 // SEO: sitemap.xml
 app.get("/sitemap.xml", () => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://hy3n4.news/</loc><changefreq>hourly</changefreq><priority>1.0</priority></url>
   <url><loc>https://hy3n4.news/guidelines</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
   <url><loc>https://hy3n4.news/legal</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
 </urlset>`;
-    return new Response(xml, {
-        headers: { "Content-Type": "application/xml" },
-    });
+  return new Response(xml, {
+    headers: { "Content-Type": "application/xml" },
+  });
 });
 
 // Merge Feature Routers
@@ -43,19 +43,19 @@ app.use(aiRouter);
  */
 const originalHandle = app.handle.bind(app);
 app.handle = async (request, env, ctx) => {
-    try {
-        const response = await originalHandle(request, env, ctx);
-        // If the original handler returned the generic "Not Found" response from Router.handle
-        if (response.status === 404 && (await response.clone().text()) === "Not Found") {
-            const user = await getSessionUser(request, env);
-            return new Response(renderNotFoundPage(user), {
-                status: 404,
-                headers: { "Content-Type": "text/html; charset=utf-8" }
-            });
-        }
-        return response;
-    } catch (e: any) {
-        console.error(`[ERROR] ${e.message}`);
-        return new Response(`Application Error: ${e.message}`, { status: 500 });
+  try {
+    const response = await originalHandle(request, env, ctx);
+    // If the original handler returned the generic "Not Found" response from Router.handle
+    if (response.status === 404 && (await response.clone().text()) === "Not Found") {
+      const user = await getSessionUser(request, env);
+      return new Response(renderNotFoundPage(user), {
+        status: 404,
+        headers: { "Content-Type": "text/html; charset=utf-8" }
+      });
     }
+    return response;
+  } catch (e: any) {
+    console.error(`[ERROR] ${e.message}`);
+    return new Response(`Application Error: ${e.message}`, { status: 500 });
+  }
 };

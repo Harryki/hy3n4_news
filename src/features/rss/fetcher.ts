@@ -2,197 +2,197 @@ import { XMLParser } from "fast-xml-parser";
 import { Env } from "../../auth";
 
 const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: "@_"
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_"
 });
 
 function decodeHtmlEntities(text: string): string {
-    return text.replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#039;/g, "'")
-        .replace(/&apos;/g, "'")
-        .replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1');
+  return text.replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1');
 }
 
 function parseItemDate(item: any): string | null {
-    const dateStr = item.pubDate || item["dc:date"] || null;
-    if (!dateStr) return null;
+  const dateStr = item.pubDate || item["dc:date"] || null;
+  if (!dateStr) return null;
 
-    try {
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return null;
-        return d.toISOString();
-    } catch {
-        return null;
-    }
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
+  } catch {
+    return null;
+  }
 }
 
 function parseRSS(xmlData: string, sourceName: string) {
-    console.log(`[PARSE] ${sourceName}: Raw XML Length is ${xmlData.length} characters. Prefix: ${xmlData.substring(0, 100).replace(/\n/g, '')}...`);
-    let jsonObj;
-    try {
-        jsonObj = parser.parse(xmlData);
-        if (!jsonObj) {
-            console.error(`[PARSE] ${sourceName}: Parsed object is null or undefined.`);
-            return [];
-        }
-    } catch (err: any) {
-        console.error(`[PARSE] ${sourceName}: Failed to parse XML. Error: ${err.message}`);
-        return [];
+  console.log(`[PARSE] ${sourceName}: Raw XML Length is ${xmlData.length} characters. Prefix: ${xmlData.substring(0, 100).replace(/\n/g, '')}...`);
+  let jsonObj;
+  try {
+    jsonObj = parser.parse(xmlData);
+    if (!jsonObj) {
+      console.error(`[PARSE] ${sourceName}: Parsed object is null or undefined.`);
+      return [];
+    }
+  } catch (err: any) {
+    console.error(`[PARSE] ${sourceName}: Failed to parse XML. Error: ${err.message}`);
+    return [];
+  }
+
+  let items: any[] = [];
+  if (jsonObj.rss && jsonObj.rss.channel && jsonObj.rss.channel.item) {
+    items = Array.isArray(jsonObj.rss.channel.item) ? jsonObj.rss.channel.item : [jsonObj.rss.channel.item];
+  } else if (jsonObj.feed && jsonObj.feed.entry) {
+    items = Array.isArray(jsonObj.feed.entry) ? jsonObj.feed.entry : [jsonObj.feed.entry];
+  } else if (jsonObj["rdf:RDF"] && jsonObj["rdf:RDF"].item) {
+    items = Array.isArray(jsonObj["rdf:RDF"].item) ? jsonObj["rdf:RDF"].item : [jsonObj["rdf:RDF"].item];
+  } else {
+    console.warn(`[PARSE] ${sourceName}: No items found in expected paths. Top-level keys: ${Object.keys(jsonObj).join(', ')}`);
+    if (jsonObj.rss) console.warn(`[PARSE] rss keys: ${Object.keys(jsonObj.rss).join(', ')}`);
+    if (jsonObj.rss?.channel) console.warn(`[PARSE] rss.channel keys: ${Object.keys(jsonObj.rss.channel).join(', ')}`);
+  }
+
+  console.log(`[PARSE] ${sourceName}: Extracted ${items.length} raw items from JSON.`);
+
+  return items.map((item: any) => {
+    let link = typeof item.link === "string" ? item.link : (item.link?.["@_href"] || "");
+    if (sourceName === "경향신문" && !link && item.guid) {
+      link = typeof item.guid === "string" ? item.guid : item.guid["#text"];
+      if (link.startsWith('http')) {
+        console.log(`[PARSE] ${sourceName}: Falling back to guid for link: ${link}`);
+      }
     }
 
-    let items: any[] = [];
-    if (jsonObj.rss && jsonObj.rss.channel && jsonObj.rss.channel.item) {
-        items = Array.isArray(jsonObj.rss.channel.item) ? jsonObj.rss.channel.item : [jsonObj.rss.channel.item];
-    } else if (jsonObj.feed && jsonObj.feed.entry) {
-        items = Array.isArray(jsonObj.feed.entry) ? jsonObj.feed.entry : [jsonObj.feed.entry];
-    } else if (jsonObj["rdf:RDF"] && jsonObj["rdf:RDF"].item) {
-        items = Array.isArray(jsonObj["rdf:RDF"].item) ? jsonObj["rdf:RDF"].item : [jsonObj["rdf:RDF"].item];
-    } else {
-        console.warn(`[PARSE] ${sourceName}: No items found in expected paths. Top-level keys: ${Object.keys(jsonObj).join(', ')}`);
-        if (jsonObj.rss) console.warn(`[PARSE] rss keys: ${Object.keys(jsonObj.rss).join(', ')}`);
-        if (jsonObj.rss?.channel) console.warn(`[PARSE] rss.channel keys: ${Object.keys(jsonObj.rss.channel).join(', ')}`);
-    }
+    let rawDescription = item.description || item.summary || "";
+    rawDescription = rawDescription.replace(/<[^>]*>?/gm, '');
 
-    console.log(`[PARSE] ${sourceName}: Extracted ${items.length} raw items from JSON.`);
-
-    return items.map((item: any) => {
-        let link = typeof item.link === "string" ? item.link : (item.link?.["@_href"] || "");
-        if (sourceName === "경향신문" && !link && item.guid) {
-            link = typeof item.guid === "string" ? item.guid : item.guid["#text"];
-            if (link.startsWith('http')) {
-                console.log(`[PARSE] ${sourceName}: Falling back to guid for link: ${link}`);
-            }
-        }
-
-        let rawDescription = item.description || item.summary || "";
-        rawDescription = rawDescription.replace(/<[^>]*>?/gm, '');
-
-        return {
-            title: decodeHtmlEntities(item.title || ""),
-            link: link,
-            description: decodeHtmlEntities(rawDescription).substring(0, 500),
-            publishedAt: parseItemDate(item)
-        };
-    }).filter((item: any) => item.title && item.link);
+    return {
+      title: decodeHtmlEntities(item.title || ""),
+      link: link,
+      description: decodeHtmlEntities(rawDescription).substring(0, 500),
+      publishedAt: parseItemDate(item)
+    };
+  }).filter((item: any) => item.title && item.link);
 }
 
 export async function performRSSFetch(env: Env): Promise<void> {
-    const startTime = Date.now();
-    console.log(`[CRON] ========== RSS fetch started at ${new Date().toISOString()} ==========`);
+  const startTime = Date.now();
+  console.log(`[CRON] ========== RSS fetch started at ${new Date().toISOString()} ==========`);
 
-    const { results: sources } = await env.DB.prepare(
-        "SELECT id, url, name FROM sources WHERE is_active = 1"
-    ).all<{ id: number; url: string; name: string }>();
+  const { results: sources } = await env.DB.prepare(
+    "SELECT id, url, name FROM sources WHERE is_active = 1"
+  ).all<{ id: number; url: string; name: string }>();
 
-    if (!sources || sources.length === 0) {
-        console.warn("[CRON] No active sources found in DB. Aborting.");
-        return;
+  if (!sources || sources.length === 0) {
+    console.warn("[CRON] No active sources found in DB. Aborting.");
+    return;
+  }
+
+  console.log(`[CRON] Found ${sources.length} active sources: ${sources.map(s => s.name).join(", ")}`);
+
+  const feedResults = await Promise.allSettled(
+    sources.map(async (source) => {
+      console.log(`[FETCH] ${source.name}: Fetching ${source.url}`);
+      const res = await fetch(source.url, {
+        headers: {
+          "User-Agent": "hy3n4-news-bot/1.0",
+          "Cache-Control": "no-cache"
+        },
+        cf: {
+          cacheTtl: 0
+        }
+      });
+      console.log(`[FETCH] ${source.name}: HTTP ${res.status} ${res.statusText}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText} for ${source.name} (${source.url})`);
+      }
+      const xml = await res.text();
+      console.log(`[FETCH] ${source.name}: Received ${xml.length} bytes of XML`);
+      const items = parseRSS(xml, source.name);
+      return { source, items };
+    })
+  );
+
+  let totalInserted = 0;
+  let totalSkipped = 0;
+  let totalErrors = 0;
+
+  const allNewIds: number[] = [];
+
+  for (const result of feedResults) {
+    if (result.status === "rejected") {
+      console.error(`[ERROR] Feed fetch failed: ${result.reason}`);
+      totalErrors++;
+      continue;
     }
 
-    console.log(`[CRON] Found ${sources.length} active sources: ${sources.map(s => s.name).join(", ")}`);
-
-    const feedResults = await Promise.allSettled(
-        sources.map(async (source) => {
-            console.log(`[FETCH] ${source.name}: Fetching ${source.url}`);
-            const res = await fetch(source.url, {
-                headers: {
-                    "User-Agent": "hy3n4-news-bot/1.0",
-                    "Cache-Control": "no-cache"
-                },
-                cf: {
-                    cacheTtl: 0
-                }
-            });
-            console.log(`[FETCH] ${source.name}: HTTP ${res.status} ${res.statusText}`);
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status} ${res.statusText} for ${source.name} (${source.url})`);
-            }
-            const xml = await res.text();
-            console.log(`[FETCH] ${source.name}: Received ${xml.length} bytes of XML`);
-            const items = parseRSS(xml, source.name);
-            return { source, items };
-        })
-    );
-
-    let totalInserted = 0;
-    let totalSkipped = 0;
-    let totalErrors = 0;
-
-    const allNewIds: number[] = [];
-
-    for (const result of feedResults) {
-        if (result.status === "rejected") {
-            console.error(`[ERROR] Feed fetch failed: ${result.reason}`);
-            totalErrors++;
-            continue;
-        }
-
-        const { source, items } = result.value;
-        if (items.length === 0) {
-            console.log(`[RESULT] ${source.name}: 0 items found.`);
-            continue;
-        }
-
-        try {
-            const statements = items.map(item =>
-                env.DB.prepare(
-                    "INSERT INTO news (source_id, title, url, description, published_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING RETURNING id"
-                ).bind(source.id, item.title, item.link, item.description, item.publishedAt)
-            );
-
-            const batchResults = await env.DB.batch<{ id: number }>(statements);
-
-            let insertedCount = 0;
-            for (const res of batchResults) {
-                if (res.results && res.results.length > 0) {
-                    // 2. 여기서 전역 배열에 ID를 모아줍니다.
-                    allNewIds.push(res.results[0].id);
-                    insertedCount++;
-                }
-            }
-
-            const skipped = items.length - insertedCount;
-            totalInserted += insertedCount;
-            totalSkipped += skipped;
-
-            console.log(`[RESULT] ${source.name}: +${insertedCount} new | ${skipped} duplicates | ${items.length} total`);
-        } catch (err) {
-            totalErrors += items.length;
-            console.error(`[DB ERROR] Batch insert failed for ${source.name}:`, err);
-        }
+    const { source, items } = result.value;
+    if (items.length === 0) {
+      console.log(`[RESULT] ${source.name}: 0 items found.`);
+      continue;
     }
 
-    // 3. 모든 피드 순회가 끝난 후, 모아진 ID가 있다면 한 번에 큐 처리
-    if (allNewIds.length > 0 && env.NEWS_PROCESSING_QUEUE) {
-        const BATCH_SIZE = 100; // D1 max bound parameters per query
-        const DELAY_MS = 200;
+    try {
+      const statements = items.map(item =>
+        env.DB.prepare(
+          "INSERT INTO news (source_id, title, url, description, published_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING RETURNING id"
+        ).bind(source.id, item.title, item.link, item.description, item.publishedAt)
+      );
 
-        const sendWithRetry = async (batch: number[], attempt: number = 1): Promise<void> => {
-            try {
-                await env.NEWS_PROCESSING_QUEUE.send({ news_ids: batch });
-            } catch (error: any) {
-                if (error.message.includes("Too Many Requests") && attempt <= 3) {
-                    console.warn(`[QUEUE] Rate limited. Retrying attempt ${attempt}...`);
-                    await new Promise(res => setTimeout(res, 1000 * attempt));
-                    return sendWithRetry(batch, attempt + 1);
-                }
-                throw error;
-            }
-        };
+      const batchResults = await env.DB.batch<{ id: number }>(statements);
 
-        for (let i = 0; i < allNewIds.length; i += BATCH_SIZE) {
-            const batch = allNewIds.slice(i, i + BATCH_SIZE);
-            await sendWithRetry(batch);
-            if (i + BATCH_SIZE < allNewIds.length) {
-                await new Promise(res => setTimeout(res, DELAY_MS));
-            }
+      let insertedCount = 0;
+      for (const res of batchResults) {
+        if (res.results && res.results.length > 0) {
+          // 2. 여기서 전역 배열에 ID를 모아줍니다.
+          allNewIds.push(res.results[0].id);
+          insertedCount++;
         }
+      }
 
-        console.log(`[QUEUE] Total ${allNewIds.length} new articles pushed in ${Math.ceil(allNewIds.length / BATCH_SIZE)} messages.`);
+      const skipped = items.length - insertedCount;
+      totalInserted += insertedCount;
+      totalSkipped += skipped;
+
+      console.log(`[RESULT] ${source.name}: +${insertedCount} new | ${skipped} duplicates | ${items.length} total`);
+    } catch (err) {
+      totalErrors += items.length;
+      console.error(`[DB ERROR] Batch insert failed for ${source.name}:`, err);
+    }
+  }
+
+  // 3. 모든 피드 순회가 끝난 후, 모아진 ID가 있다면 한 번에 큐 처리
+  if (allNewIds.length > 0 && env.NEWS_PROCESSING_QUEUE) {
+    const BATCH_SIZE = 100; // D1 max bound parameters per query
+    const DELAY_MS = 200;
+
+    const sendWithRetry = async (batch: number[], attempt: number = 1): Promise<void> => {
+      try {
+        await env.NEWS_PROCESSING_QUEUE.send({ news_ids: batch });
+      } catch (error: any) {
+        if (error.message.includes("Too Many Requests") && attempt <= 3) {
+          console.warn(`[QUEUE] Rate limited. Retrying attempt ${attempt}...`);
+          await new Promise(res => setTimeout(res, 1000 * attempt));
+          return sendWithRetry(batch, attempt + 1);
+        }
+        throw error;
+      }
+    };
+
+    for (let i = 0; i < allNewIds.length; i += BATCH_SIZE) {
+      const batch = allNewIds.slice(i, i + BATCH_SIZE);
+      await sendWithRetry(batch);
+      if (i + BATCH_SIZE < allNewIds.length) {
+        await new Promise(res => setTimeout(res, DELAY_MS));
+      }
     }
 
-    console.log(`[CRON] RSS Summary: ${totalInserted} inserted | ${totalSkipped} skipped | ${totalErrors} errors`);
+    console.log(`[QUEUE] Total ${allNewIds.length} new articles pushed in ${Math.ceil(allNewIds.length / BATCH_SIZE)} messages.`);
+  }
+
+  console.log(`[CRON] RSS Summary: ${totalInserted} inserted | ${totalSkipped} skipped | ${totalErrors} errors`);
 }

@@ -33,8 +33,9 @@ max_concurrency = 1
 
 [[d1_databases]]
 binding = "DB"
-database_name = "news-db-dev"
-database_id = "95f0dd23-71ed-405c-98ee-811b69604541"
+database_name = "news-db"
+database_id = "15bbb429-a4bf-4c66-81fb-73ad4ea7e3ff"
+remote = true
 
 [[ratelimits]]
 name = "RATE_LIMITER"

@@ -12,7 +12,7 @@ export const CSS_STYLES = `
     }
 
     body {
-      font-family: 'MaruBuri', Arial, serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       max-width: 100%;
@@ -22,7 +22,7 @@ export const CSS_STYLES = `
     }
 
     header {
-      font-family: "Godo", "Inter", Arial, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--border);
       padding: 12px 20px;
       display: flex;
@@ -710,9 +710,6 @@ export function renderHTML(content: string, user: string | null = null, currentL
   <link rel="canonical" href="https://hy3n4.news/">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📰</text></svg>">
 
-  <link rel="preload" href="/fonts/MaruBuri-Regular.woff2" as="font" type="font/woff2" crossorigin >
-  <link rel="preload" href="/fonts/GodoM.woff2" as="font" type="font/woff2" crossorigin >
-
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -727,21 +724,6 @@ export function renderHTML(content: string, user: string | null = null, currentL
   <style>
 
     ${CSS_STYLES}
-
-    @font-face {
-      font-family: 'MaruBuri';
-      src: url('/fonts/MaruBuri-Regular.woff2') format('woff2');
-      font-style: normal;
-      font-weight: normal;
-      font-display: optional;
-    }
-    @font-face {
-      font-family: 'Godo';
-      src: url('/fonts/GodoM.woff2') format('woff2');
-      font-style: normal;
-      font-weight: normal;
-      font-display: optional;
-    }
 
   </style>
   <!-- Google tag (gtag.js) -->
@@ -883,10 +865,23 @@ export function renderNewsList(sourceName: string, news: any[]) {
     const domain = new URL(item.url).hostname.replace('www.', '');
     const timeStr = getRelativeTime(item.published_at, item.created_at);
 
+    const viewCount = item.view_count || 0;
+    let fireHtml = '';
+    let titleWeight = viewCount >= 1 ? '600' : 'normal';
+
+    if (viewCount >= 2) {
+      fireHtml = '<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="hot" style="width: 16px; height: 16px; margin-left: 2px;">'.repeat(2);
+    } else if (viewCount === 1) {
+      fireHtml = '<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="hot" style="width: 16px; height: 16px; margin-left: 2px;">';
+    }
+
     html += `
         <li class="news-item">
           <div class="news-content">
-            <a href="/go/${item.id}" rel="nofollow" target="_blank" class="news-title">${item.title}</a>
+            <a href="/go/${item.id}" rel="nofollow" target="_blank" class="news-title" style="display: flex; align-items: center;">
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: ${titleWeight};">${item.title}</span>
+              <span style="flex-shrink: 0; display: inline-flex; margin-left: 4px;">${fireHtml}</span>
+            </a>
             <div class="news-meta">
               <span class="meta-pill meta-time">${timeStr}</span>
               <span class="news-domain">(${domain})</span>
@@ -994,10 +989,23 @@ export function renderWideNewsList(news: any[]) {
     const domain = new URL(item.url).hostname.replace('www.', '');
     const timeStr = getRelativeTime(item.published_at, item.created_at);
 
+    const viewCount = item.view_count || 0;
+    let fireHtml = '';
+    let titleWeight = viewCount >= 1 ? '600' : 'normal';
+
+    if (viewCount >= 2) {
+      fireHtml = '<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="hot" style="width: 16px; height: 16px; margin-left: 2px;">'.repeat(2);
+    } else if (viewCount === 1) {
+      fireHtml = '<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="hot" style="width: 16px; height: 16px; margin-left: 2px;">';
+    }
+
     html += `
         <li class="news-item" style="border-bottom: 1px dashed rgba(87,53,43,0.2); padding: 16px 0;">
           <div class="news-content">
-            <a href="/go/${item.id}" target="_blank" class="news-title">${item.title}</a>
+            <a href="/go/${item.id}" target="_blank" class="news-title" style="display: flex; align-items: center;">
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: ${titleWeight};">${item.title}</span>
+              <span style="flex-shrink: 0; display: inline-flex; margin-left: 4px;">${fireHtml}</span>
+            </a>
             <div class="news-meta">
               <span class="meta-pill" style="background:rgba(87,53,43,0.1); color:var(--secondary);">${item.source_name}</span>
               <span class="meta-pill meta-time">${timeStr}</span>

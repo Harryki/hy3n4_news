@@ -708,7 +708,7 @@ export function renderHTML(content: string, user: string | null = null, currentL
   <meta name="twitter:title" content="하이에나뉴스 | 주요 언론사 실시간 헤드라인 모아보기">
   <meta name="twitter:description" content="대한민국 주요 언론사의 뉴스를 한눈에 파악하는 가장 빠른 방법.">
   <link rel="canonical" href="https://hy3n4.news/">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📰</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="/hyena.svg">
 
   <script type="application/ld+json">
   {
@@ -744,7 +744,12 @@ export function renderHTML(content: string, user: string | null = null, currentL
   </script>
   <div class="app-container">
     <header>
-      <h1><a href="/" style="color: var(--bg); text-decoration: none;">하이에나뉴스</a></h1>
+      <h1>
+        <a href="/" style="color: var(--bg); text-decoration: none; display: flex; align-items: center; gap: 8px;">
+          <img src="/hyena.svg" alt="logo" style="width: 28px; height: 28px; object-fit: contain;">
+          하이에나뉴스
+        </a>
+      </h1>
       <div class="header-right">
         <button id="search-open-btn" class="icon-btn" title="검색">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>

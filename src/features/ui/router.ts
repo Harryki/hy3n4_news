@@ -261,6 +261,9 @@ uiRouter.get("/", async (request, env) => {
   const limit = parseInt(queryLimit || prefLimit || "10", 10);
   const timeHours = parseInt(queryTime || "24", 10);
 
+  const offset = (page - 1) * limit;
+  const upperLimit = page * limit;
+
   // SQL News Query
   const now = new Date();
   const timeAgo = new Date(now.getTime() - timeHours * 60 * 60 * 1000).toISOString();
@@ -284,9 +287,9 @@ uiRouter.get("/", async (request, env) => {
         FROM ranked_news
         JOIN news n ON n.id = ranked_news.id
         JOIN sources s ON n.source_id = s.id
-        WHERE ranked_news.rn <= ?
+        WHERE ranked_news.rn > ? AND ranked_news.rn <= ?
         ORDER BY n.published_at DESC;
-    `).bind(timeAgo, limit).all<NewsRow>();
+    `).bind(timeAgo, offset, upperLimit).all<NewsRow>();
 
 
   // Hot Topics

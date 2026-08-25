@@ -1,7 +1,7 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { getRelativeTime } from "../../core/utils";
-import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults } from "./templates";
+import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults, renderPagination } from "./templates";
 
 export const uiRouter = new Router();
 
@@ -80,6 +80,7 @@ export function renderPage(
   topicId: number | null = null,
   updatedAt: string | null = null
 ): string {
+  page = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   let content = "";
 
   if (topicName) {
@@ -89,13 +90,12 @@ export function renderPage(
     content += `<h2 style="padding: 20px 0; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}${updateInfo}</h2>`;
     content += renderWideNewsList(news);
 
-    if (topicId && news.length === 50) {
-      content += `<div style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
-                <a href="/topic/${topicId}?page=${page + 1}" rel="nofollow" 
-                   style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold;">
-                   더 보기
-                </a>
-            </div>`;
+    if (topicId) {
+      const topicHasMore = news.length === 50;
+      const topicPrevUrl = page > 1 ? `/topic/${topicId}?page=${page - 1}` : null;
+      const topicNextUrl = topicHasMore ? `/topic/${topicId}?page=${page + 1}` : null;
+      const topicFirstUrl = page > 1 ? `/topic/${topicId}?page=1` : null;
+      content += renderPagination({ page, hasMore: topicHasMore, prevUrl: topicPrevUrl, nextUrl: topicNextUrl, firstUrl: topicFirstUrl });
     }
 
     return renderHTML(content, user?.username, currentLimit, currentTime);
@@ -143,13 +143,12 @@ export function renderPage(
   });
   content += `<div class="news-columns">${colsHtml}</div>`;
 
-  if (Array.isArray(news) && news.length >= currentLimit) {
-    content += `<div style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
-            <a href="/?page=${page + 1}&limit=${currentLimit}&time=${currentTime}" rel="nofollow" 
-               style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold;">
-               더 보기
-            </a>
-        </div>`;
+  {
+    const hasMore = Array.isArray(news) && news.length >= currentLimit;
+    const prevUrl = page > 1 ? `/?page=${page - 1}&limit=${currentLimit}&time=${currentTime}` : null;
+    const nextUrl = hasMore ? `/?page=${page + 1}&limit=${currentLimit}&time=${currentTime}` : null;
+    const firstUrl = page > 1 ? `/?page=1&limit=${currentLimit}&time=${currentTime}` : null;
+    content += renderPagination({ page, hasMore, prevUrl, nextUrl, firstUrl });
   }
 
   return renderHTML(content, user?.username, currentLimit, currentTime);
@@ -166,7 +165,8 @@ function getCookie(request: Request, name: string): string | null {
 uiRouter.get("/search", async (request, env) => {
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() || null;
-  const page = parseInt(url.searchParams.get("page") || "1", 10);
+  const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const limit = 20;
   const offset = (page - 1) * limit;
   const user = await getSessionUser(request, env);
@@ -256,7 +256,8 @@ uiRouter.get("/", async (request, env) => {
   const queryLimit = url.searchParams.get("limit");
   const queryTime = url.searchParams.get("time");
 
-  const page = parseInt(queryPage || "1", 10);
+  const rawPage = parseInt(queryPage || "1", 10);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const prefLimit = getCookie(request, "pref_limit");
   const limit = parseInt(queryLimit || prefLimit || "10", 10);
   const timeHours = parseInt(queryTime || "24", 10);
@@ -337,7 +338,8 @@ uiRouter.get("/", async (request, env) => {
 uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
   const topicId = parseInt(match![1], 10);
   const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get("page") || "1", 10);
+  const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const user = await getSessionUser(request, env);
 
   const topicRow = await env.DB.prepare("SELECT title, updated_at, keywords FROM topics WHERE id = ?").bind(topicId).first<{ title: string; updated_at: string; keywords: string }>();

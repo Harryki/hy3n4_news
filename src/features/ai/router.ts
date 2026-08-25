@@ -44,7 +44,7 @@ function renderTopicGroups(topics: any[], newsByTopic: Record<number, any[]>): s
 
 function renderLoadMoreButton(query: string, nextPage: number): string {
   return `<div id="search-load-more" style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
-        <a hx-get="/api/search?q=${encodeURIComponent(query)}&page=${nextPage}" hx-target="#search-load-more" hx-swap="outerHTML" rel="nofollow"
+        <a hx-get="/api/search?q=${encodeURIComponent(query)}&page=${nextPage}" hx-target="#search-load-more" hx-swap="outerHTML" rel="next"
            style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold; cursor: pointer;">
            더 보기
         </a>
@@ -93,7 +93,8 @@ aiRouter.get("/api/search", async (request, env) => {
   if (!q) return new Response("", { status: 200 });
 
   const PAGE_SIZE = 20;
-  const page = parseInt(url.searchParams.get("page") || "1", 10);
+  const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const offset = (page - 1) * PAGE_SIZE;
 
   // 1. Embed query for semantic search

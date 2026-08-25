@@ -925,7 +925,42 @@ function escapeHtml(str: string): string {
   return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+export function renderPagination(opts: { page: number; hasMore: boolean; prevUrl: string | null; nextUrl: string | null; firstUrl: string | null }): string {
+  const { page, hasMore, prevUrl, nextUrl, firstUrl } = opts;
+  // No pagination needed on single page without prev/next
+  if (!prevUrl && !nextUrl) return '';
+  const btnStyle = 'display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold;';
+  const outlineBtnStyle = 'display: inline-block; padding: 10px 20px; background: transparent; color: var(--accent); text-decoration: none; border-radius: 20px; font-weight: bold; border: 1.5px solid var(--accent);';
+  const disabledStyle = 'display: inline-block; padding: 10px 20px; background: var(--border); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold; opacity: 0.35; pointer-events: none;';
+  const pageInfo = `<span style="font-size:14px; color: var(--secondary); font-weight: bold; min-width: 70px; text-align: center;">${page} 페이지</span>`;
+
+  let html = `<div style="display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; padding: 20px; border-top: 1px solid var(--border); ${firstUrl ? 'margin-top: 20px;' : ''}">`;
+
+  if (prevUrl) {
+    html += `<a href="${prevUrl}" rel="prev" style="${btnStyle}">← 이전</a>`;
+  } else {
+    html += `<span style="${disabledStyle}">← 이전</span>`;
+  }
+
+  html += pageInfo;
+
+  if (nextUrl) {
+    html += `<a href="${nextUrl}" rel="next" style="${btnStyle}">다음 →</a>`;
+  } else {
+    // keep layout balanced: disabled next when on last page but prev exists
+    html += `<span style="${disabledStyle}">다음 →</span>`;
+  }
+
+  if (firstUrl) {
+    html += `<a href="${firstUrl}" style="${outlineBtnStyle}">처음으로</a>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
 export function renderSearchResults(query: string | null, topics: any[], newsByTopic: Record<number, any[]>, page: number = 1, hasMore: boolean = false): string {
+  page = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   let html = '<div class="search-results-container">';
 
   if (query) {
@@ -936,6 +971,11 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
 
   if (topics.length === 0) {
     html += `<p style="padding: 40px; text-align: center; color: var(--secondary);">결과가 없습니다.</p>`;
+    if (page > 1) {
+      const prevUrl = query ? `/search?q=${encodeURIComponent(query)}&page=${page - 1}` : `/search?page=${page - 1}`;
+      const firstUrl = query ? `/search?q=${encodeURIComponent(query)}&page=1` : `/search?page=1`;
+      html += renderPagination({ page, hasMore: false, prevUrl, nextUrl: null, firstUrl });
+    }
   } else {
     for (const topic of topics) {
       const topicNews = newsByTopic[topic.id] || [];
@@ -959,21 +999,16 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
             `;
     }
 
-    if (hasMore) {
-      const nextLink = query
-        ? `/search?q=${encodeURIComponent(query)}&page=${page + 1}`
-        : `/search?page=${page + 1}`;
-
-      html += `
-                <div style="text-align: center; padding: 20px; border-top: 1px solid var(--border); margin-top: 20px;">
-                    <a href="${nextLink}" 
-                       rel="nofollow"
-                       style="display: inline-block; padding: 10px 24px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 24px; font-weight: bold; font-size: 15px; transition: opacity 0.2s;">
-                       토픽 더 보기
-                    </a>
-                </div>
-            `;
-    }
+    const prevUrl = page > 1
+      ? (query ? `/search?q=${encodeURIComponent(query)}&page=${page - 1}` : `/search?page=${page - 1}`)
+      : null;
+    const nextUrl = hasMore
+      ? (query ? `/search?q=${encodeURIComponent(query)}&page=${page + 1}` : `/search?page=${page + 1}`)
+      : null;
+    const firstUrl = page > 1
+      ? (query ? `/search?q=${encodeURIComponent(query)}&page=1` : `/search?page=1`)
+      : null;
+    html += renderPagination({ page, hasMore, prevUrl, nextUrl, firstUrl });
   }
 
   html += '</div>';

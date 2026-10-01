@@ -142,11 +142,16 @@ Output format:
               }
             ],
             max_tokens: 512
-          }) as { response: string };
+          }) as any;
 
-          if (aiResponse?.response) {
+          const rawText: string =
+            aiResponse?.response ||
+            aiResponse?.choices?.[0]?.message?.content ||
+            "";
+
+          if (rawText) {
             try {
-              const rawContent = aiResponse.response.trim();
+              const rawContent = rawText.trim();
               const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
 
               if (jsonMatch) {
@@ -167,8 +172,10 @@ Output format:
               }
             } catch (e: any) {
               console.error(`[QUEUE] Parse failed for topic ${topic.id}:`, e.message);
-              console.error(`[DEBUG] Raw AI output was: ${aiResponse.response}`);
+              console.error(`[DEBUG] Raw AI output was: ${rawText}`);
             }
+          } else {
+            console.error(`[QUEUE] Empty or unexpected AI response for topic ${topic.id}:`, JSON.stringify(aiResponse));
           }
         } catch (e: any) {
           console.error(`[QUEUE] AI Error for topic ${topic.id}:`, e.message);

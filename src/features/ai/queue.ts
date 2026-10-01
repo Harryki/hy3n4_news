@@ -141,12 +141,16 @@ Output format:
 }`
               }
             ],
-            max_tokens: 512
+            max_tokens: 1024,
+            chat_template_kwargs: {
+              enable_thinking: false
+            }
           }) as any;
 
           const rawText: string =
             aiResponse?.response ||
             aiResponse?.choices?.[0]?.message?.content ||
+            aiResponse?.choices?.[0]?.message?.reasoning_content ||
             "";
 
           if (rawText) {

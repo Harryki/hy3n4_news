@@ -160,6 +160,49 @@ function getCookie(request: Request, name: string): string | null {
   return match ? match[1] : null;
 }
 
+const EDGE_CACHE_TTL_SECONDS = 600; // 10 minutes (RSS cron runs every 30 minutes)
+const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=180, s-maxage=600, stale-while-revalidate=900";
+
+async function withEdgeCache<T>(
+  cacheKeyUrl: string,
+  ttlSeconds: number,
+  ctx: ExecutionContext | undefined,
+  fetcher: () => Promise<T>
+): Promise<T> {
+  const cache = typeof caches !== "undefined" ? caches.default : null;
+  const cacheReq = new Request(cacheKeyUrl, { method: "GET" });
+
+  if (cache) {
+    try {
+      const cachedRes = await cache.match(cacheReq);
+      if (cachedRes) {
+        return (await cachedRes.json()) as T;
+      }
+    } catch (e) {
+      console.warn("[CACHE] Edge cache read failed:", e);
+    }
+  }
+
+  const data = await fetcher();
+
+  if (cache && data !== null && data !== undefined) {
+    const resToCache = new Response(JSON.stringify(data), {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": `public, max-age=${ttlSeconds}, s-maxage=${ttlSeconds}`,
+      },
+    });
+    const putPromise = cache.put(cacheReq, resToCache).catch((e) => {
+      console.warn("[CACHE] Edge cache write failed:", e);
+    });
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil(putPromise);
+    }
+  }
+
+  return data;
+}
+
 // --- Routes ---
 
 uiRouter.get("/search", async (request, env) => {
@@ -247,7 +290,7 @@ uiRouter.get("/search", async (request, env) => {
   });
 });
 
-uiRouter.get("/", async (request, env) => {
+uiRouter.get("/", async (request, env, ctx) => {
   const url = new URL(request.url);
 
   const user = await getSessionUser(request, env);
@@ -259,22 +302,28 @@ uiRouter.get("/", async (request, env) => {
   const rawPage = parseInt(queryPage || "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const prefLimit = getCookie(request, "pref_limit");
-  const limit = parseInt(queryLimit || prefLimit || "10", 10);
-  const timeHours = parseInt(queryTime || "24", 10);
+  const rawLimit = parseInt(queryLimit || prefLimit || "10", 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 50) : 10;
+  const rawTime = parseInt(queryTime || "24", 10);
+  const timeHours = Number.isFinite(rawTime) && rawTime > 0 ? Math.min(Math.floor(rawTime), 168) : 24;
 
   const offset = (page - 1) * limit;
   const upperLimit = page * limit;
 
-  // SQL News Query
-  const now = new Date();
-  const timeAgo = new Date(now.getTime() - timeHours * 60 * 60 * 1000).toISOString();
+  // Fetch news (cached at Edge for 10m; SQL uses PARTITION BY +source_id to force idx_news_feed_composite range scan)
+  const newsCacheKey = `https://cache.hy3n4.news/d1/news?time=${timeHours}&limit=${limit}&page=${page}`;
+  const topicsCacheKey = `https://cache.hy3n4.news/d1/hot-topics`;
 
-  // Fetch news from all sources within time window using diverse selection
-  const { results: news } = await env.DB.prepare(`
+  const [news, hotTopics] = await Promise.all([
+    withEdgeCache<NewsRow[]>(newsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
+      const now = new Date();
+      const timeAgo = new Date(now.getTime() - timeHours * 60 * 60 * 1000).toISOString();
+
+      const { results } = await env.DB.prepare(`
         -- NEWS QUERY
         WITH ranked_news AS (
-            SELECT id, source_id,
-                   ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY published_at DESC) as rn
+            SELECT id, source_id, title, url, description, upvotes, view_count, published_at, created_at,
+                   ROW_NUMBER() OVER (PARTITION BY +source_id ORDER BY published_at DESC) as rn
             FROM news
             WHERE published_at >= ?
         )
@@ -285,45 +334,58 @@ uiRouter.get("/", async (request, env) => {
              FROM news_topics nt 
              JOIN topics t ON nt.topic_id = t.id 
              WHERE nt.news_id = n.id) as keywords
-        FROM ranked_news
-        JOIN news n ON n.id = ranked_news.id
+        FROM ranked_news n
         JOIN sources s ON n.source_id = s.id
-        WHERE ranked_news.rn > ? AND ranked_news.rn <= ?
+        WHERE n.rn > ? AND n.rn <= ?
         ORDER BY n.published_at DESC;
-    `).bind(timeAgo, offset, upperLimit).all<NewsRow>();
+      `).bind(timeAgo, offset, upperLimit).all<NewsRow>();
 
+      return results ?? [];
+    }),
 
-  // Hot Topics
-  const { results: topics } = await env.DB.prepare(`
+    withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
+      const { results } = await env.DB.prepare(`
         -- TOPICS QUERY
-        SELECT 
-            t.id, 
-            t.title, 
-            t.keywords, 
-            topic_counts.article_count,
-            (topic_counts.article_count * 1.0) / POW(((julianday('now') - julianday(t.updated_at)) * 24) + 2, 1.8) AS trending_score
-        FROM (
-            SELECT topic_id, COUNT(news_id) as article_count
-            FROM news_topics
-            WHERE topic_id IN (
-                SELECT id FROM topics WHERE updated_at >= datetime('now', '-24 hours')
-            )
-            GROUP BY topic_id
+        WITH recent_topics AS MATERIALIZED (
+            SELECT id, title, updated_at
+            FROM topics
+            WHERE updated_at >= datetime('now', '-24 hours')
+        ),
+        top_topics AS (
+            SELECT 
+                rt.id,
+                rt.title,
+                COUNT(nt.news_id) as article_count,
+                (COUNT(nt.news_id) * 1.0) / POW(((julianday('now') - julianday(rt.updated_at)) * 24) + 2, 1.8) AS trending_score
+            FROM recent_topics rt
+            JOIN news_topics nt ON nt.topic_id = rt.id
+            GROUP BY rt.id
             HAVING article_count > 1
-        ) AS topic_counts
-        JOIN topics t ON t.id = topic_counts.topic_id
-        ORDER BY trending_score DESC
-        LIMIT 10;
-    `).all<TopicRow>();
-  const hotTopics = topics ?? [];
+            ORDER BY trending_score DESC
+            LIMIT 10
+        )
+        SELECT 
+            tt.id, 
+            tt.title, 
+            t.keywords, 
+            tt.article_count,
+            tt.trending_score
+        FROM top_topics tt
+        JOIN topics t ON t.id = tt.id
+        ORDER BY tt.trending_score DESC;
+      `).all<TopicRow>();
 
-  const ranked = (news ?? []).sort((a, b) => {
+      return results ?? [];
+    }),
+  ]);
+
+  const ranked = [...(news ?? [])].sort((a, b) => {
     const dateA = new Date(a.published_at || a.created_at).getTime();
     const dateB = new Date(b.published_at || b.created_at).getTime();
     return dateB - dateA;
   });
 
-  const html = renderPage(ranked, user, "", limit, timeHours, hotTopics, page);
+  const html = renderPage(ranked, user, "", limit, timeHours, hotTopics ?? [], page);
 
   const response = new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -331,6 +393,12 @@ uiRouter.get("/", async (request, env) => {
 
   if (queryLimit) {
     response.headers.append("Set-Cookie", `pref_limit=${limit}; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
+    response.headers.set("Cache-Control", "private, no-cache");
+  } else if (user) {
+    response.headers.set("Cache-Control", "private, no-cache");
+  } else {
+    response.headers.set("Cache-Control", PUBLIC_HTML_CACHE_CONTROL);
+    response.headers.set("Vary", "Cookie");
   }
 
   return response;
@@ -342,10 +410,20 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const user = await getSessionUser(request, env);
 
-  const topicRow = await env.DB.prepare("SELECT title, updated_at, keywords FROM topics WHERE id = ?").bind(topicId).first<{ title: string; updated_at: string; keywords: string }>();
-  if (!topicRow) return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html" } });
+  const topicCacheKey = `https://cache.hy3n4.news/d1/topic/${topicId}?page=${page}`;
+  const topicData = await withEdgeCache<{
+    topicRow: { title: string; updated_at: string; keywords: string } | null;
+    news: NewsRow[];
+  }>(topicCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
+    const topicRow = await env.DB.prepare(
+      "SELECT title, updated_at, keywords FROM topics WHERE id = ?"
+    ).bind(topicId).first<{ title: string; updated_at: string; keywords: string }>();
 
-  const { results: news } = await env.DB.prepare(`
+    if (!topicRow) {
+      return { topicRow: null, news: [] };
+    }
+
+    const { results: news } = await env.DB.prepare(`
         SELECT n.id, n.title, n.url, n.description, n.published_at, n.created_at, s.name as source_name,
                (SELECT group_concat(t2.keywords, ', ') FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
         FROM news n
@@ -356,8 +434,31 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
         LIMIT 50 OFFSET ?
     `).bind(topicId, (page - 1) * 50).all<NewsRow>();
 
-  const html = renderPage(news, user, topicRow.title, 25, 24, [], page, topicId, topicRow.updated_at);
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    return { topicRow, news: news ?? [] };
+  });
+
+  if (!topicData.topicRow) {
+    return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html" } });
+  }
+
+  const html = renderPage(
+    topicData.news,
+    user,
+    topicData.topicRow.title,
+    25,
+    24,
+    [],
+    page,
+    topicId,
+    topicData.topicRow.updated_at
+  );
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": user ? "private, no-cache" : PUBLIC_HTML_CACHE_CONTROL,
+      "Vary": "Cookie",
+    },
+  });
 });
 
 uiRouter.get("/user", async (request, env) => {

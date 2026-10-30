@@ -46,24 +46,34 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
     const item = unclustered[i];
     const vector = vectors[i];
 
-    // Search Vectorize
-    const searchRes = await env.VECTORIZE.query(vector, { topK: 3 });
+    // Search Vectorize (fetch topK: 5 to allow filtering out topics older than 10 days)
+    const searchRes = await env.VECTORIZE.query(vector, { topK: 5 });
     const matches = searchRes.matches.filter((m: any) => m.score > 0.65);
 
+    let mappedToExisting = false;
+
     if (matches.length > 0) {
-      // Map to existing topics
+      // Map to existing topics created within the last 10 days (up to 3)
+      let mappedForThisItem = 0;
       for (const match of matches) {
+        if (mappedForThisItem >= 3) break;
         const topicId = parseInt(match.id, 10);
         try {
+          const validTopic = await env.DB.prepare(
+            "UPDATE topics SET updated_at = datetime('now') WHERE id = ? AND created_at >= datetime('now', '-10 days') RETURNING id"
+          ).bind(topicId).first<{ id: number }>();
+
+          if (!validTopic) {
+            continue;
+          }
+
           await env.DB.prepare(
             "INSERT INTO news_topics (news_id, topic_id, similarity_score) VALUES (?, ?, ?)"
           ).bind(item.id, topicId, match.score).run();
 
-          await env.DB.prepare(
-            "UPDATE topics SET updated_at = datetime('now') WHERE id = ?"
-          ).bind(topicId).run();
           clusteredCount++;
-
+          mappedForThisItem++;
+          mappedToExisting = true;
           topicsToCheck.add(topicId);
         } catch (e: any) {
           // Log more detail for debugging foreign key issues
@@ -73,8 +83,9 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
           }
         }
       }
+    }
 
-    } else {
+    if (!mappedToExisting) {
       // Create new topic
       const newTopic = await env.DB.prepare(
         "INSERT INTO topics (title) VALUES (?) RETURNING id"

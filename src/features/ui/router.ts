@@ -160,8 +160,8 @@ function getCookie(request: Request, name: string): string | null {
   return match ? match[1] : null;
 }
 
-const EDGE_CACHE_TTL_SECONDS = 600; // 10 minutes (RSS cron runs every 30 minutes)
-const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=180, s-maxage=600, stale-while-revalidate=900";
+const EDGE_CACHE_TTL_SECONDS = 1800; // 30 minutes (matches RSS cron interval */30 * * * *)
+const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300, s-maxage=1800, stale-while-revalidate=1800";
 
 async function withEdgeCache<T>(
   cacheKeyUrl: string,
@@ -346,33 +346,20 @@ uiRouter.get("/", async (request, env, ctx) => {
     withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
       const { results } = await env.DB.prepare(`
         -- TOPICS QUERY
-        WITH recent_topics AS MATERIALIZED (
-            SELECT id, title, updated_at
-            FROM topics
-            WHERE updated_at >= datetime('now', '-24 hours')
-        ),
-        top_topics AS (
-            SELECT 
-                rt.id,
-                rt.title,
-                COUNT(nt.news_id) as article_count,
-                (COUNT(nt.news_id) * 1.0) / POW(((julianday('now') - julianday(rt.updated_at)) * 24) + 2, 1.8) AS trending_score
-            FROM recent_topics rt
-            JOIN news_topics nt ON nt.topic_id = rt.id
-            GROUP BY rt.id
-            HAVING article_count > 1
-            ORDER BY trending_score DESC
-            LIMIT 10
-        )
         SELECT 
-            tt.id, 
-            tt.title, 
+            t.id, 
+            t.title, 
             t.keywords, 
-            tt.article_count,
-            tt.trending_score
-        FROM top_topics tt
-        JOIN topics t ON t.id = tt.id
-        ORDER BY tt.trending_score DESC;
+            COUNT(nt.news_id) as article_count,
+            (COUNT(nt.news_id) * 1.0) / POW(((julianday('now') - julianday(t.updated_at)) * 24) + 2, 1.8) AS trending_score
+        FROM topics t
+        CROSS JOIN news_topics nt ON nt.topic_id = t.id
+        WHERE t.updated_at >= datetime('now', '-24 hours')
+          AND t.created_at >= datetime('now', '-10 days')
+        GROUP BY t.updated_at, t.id
+        HAVING article_count > 1
+        ORDER BY trending_score DESC
+        LIMIT 10;
       `).all<TopicRow>();
 
       return results ?? [];
@@ -424,14 +411,18 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     }
 
     const { results: news } = await env.DB.prepare(`
+        WITH paged_news AS (
+            SELECT n.id, n.source_id, n.title, n.url, n.description, n.published_at, n.created_at
+            FROM news_topics nt
+            JOIN news n ON n.id = nt.news_id
+            WHERE nt.topic_id = ?
+            ORDER BY n.published_at DESC
+            LIMIT 50 OFFSET ?
+        )
         SELECT n.id, n.title, n.url, n.description, n.published_at, n.created_at, s.name as source_name,
                (SELECT group_concat(t2.keywords, ', ') FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
-        FROM news n
-        JOIN news_topics nt ON n.id = nt.news_id
-        JOIN sources s ON n.source_id = s.id
-        WHERE nt.topic_id = ?
-        ORDER BY n.published_at DESC
-        LIMIT 50 OFFSET ?
+        FROM paged_news n
+        CROSS JOIN sources s ON n.source_id = s.id
     `).bind(topicId, (page - 1) * 50).all<NewsRow>();
 
     return { topicRow, news: news ?? [] };

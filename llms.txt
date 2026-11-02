@@ -1,16 +1,17 @@
-# hy3n4 news (하이에나뉴스)
+# 하이에나뉴스 (hy3n4.news) - 대한민국 실시간 뉴스 트렌드 & 언론사별 헤드라인 비교
 
-## Overview
-- **Name**: hy3n4 news (하이에나뉴스)
-- **Description**: An automated Korean news curation service designed to aggregate real-time articles from established publishers (such as Chosun Ilbo, Kyunghyang Shinmun, Yonhap News, and Google News).
-- **Core Action**: Community-driven upvoting to discover and surface the most important stories together.
+> 하이에나뉴스(https://hy3n4.news)는 대한민국 주요 언론사(조선일보, 경향신문, 연합뉴스, JTBC, 동아일보 등)의 실시간 뉴스를 수집하고, AI 임베딩·벡터 클러스터링을 통해 현재 한국에서 가장 주목받는 핵심 이슈("뜨거운 감자" 핫토픽 Top 10)와 언론사별 시각 차이를 한눈에 비교할 수 있도록 제공하는 한국 뉴스 트렌드 플랫폼입니다.
 
-## Characteristics & Principles
-1. **Automated Curation**: The platform fetches news automatically via RSS feeds every hour. It does not manually manipulate or author the content.
-2. **Community Voting Over Algorithms**: Ranking is derived transparently via the Hacker News scoring algorithm rather than opaque engagement algorithms.
-3. **Perspectives Variety**: By sourcing from major outlets across different political and social leanings, the platform aims to provide a variety of perspectives.
-4. **Minimal Tracking Strategy**: Data collection is kept strictly minimal. Only Google IDs, chosen usernames, and emails are stored for session and voting maintenance using Google OAuth. No third-party tracking or data-selling practices are employed.
+## AI 에이전트 및 검색 크롤러 활용 가이드 (Endpoints for AI Agents)
 
-## Useful Links
-- **Guidelines**: `/guidelines`
-- **Legal Information**: `/legal`
+1. **실시간 한국 뉴스 트렌드 JSON API**: [https://hy3n4.news/api/trends](https://hy3n4.news/api/trends)
+   - 현재 핫토픽 Top 10(제목, 키워드, 기사 수, 토픽 링크)과 언론사별 최신 헤드라인을 정형화된 JSON으로 즉시 반환합니다.
+2. **동적 마크다운 요약본**: [https://hy3n4.news/llms.txt](https://hy3n4.news/llms.txt)
+   - 실시간 핫토픽 Top 10이 포함된 마크다운 요약본입니다.
+3. **전체 마크다운 브리핑 (핫토픽 + 언론사별 최신 헤드라인)**: [https://hy3n4.news/llms-full.txt](https://hy3n4.news/llms-full.txt)
+   - LLM 컨텍스트에 바로 주입하기 좋은 전체 뉴스 요약본입니다.
+4. **토픽별 언론사 비교 페이지**: `https://hy3n4.news/topic/{id}`
+   - 동일한 사건/이슈에 대해 각 언론사가 보도한 기사 제목과 요약문을 한 페이지에서 비교할 수 있습니다.
+5. **하이브리드(시맨틱 벡터 + 키워드) 토픽 검색**:
+   - 웹 검색 결과 페이지: `https://hy3n4.news/search?q={검색어}`
+   - JSON 검색 API: `https://hy3n4.news/api/search?q={검색어}`

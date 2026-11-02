@@ -1,12 +1,12 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { getRelativeTime } from "../../core/utils";
-import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults, renderPagination } from "./templates";
+import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults, renderPagination, SeoOptions } from "./templates";
 
 export const uiRouter = new Router();
 
 // Define shared interfaces used by the UI routes
-interface NewsRow {
+export interface NewsRow {
   id: number;
   title: string;
   url: string;
@@ -19,12 +19,13 @@ interface NewsRow {
   keywords?: string;
 }
 
-interface TopicRow {
+export interface TopicRow {
   id: number;
   title: string;
   article_count: number;
   keywords?: string;
   updated_at?: string;
+  trending_score?: number;
 }
 
 // Helper: 404 Page Template
@@ -66,7 +67,10 @@ export function renderNotFoundPage(user: { username: string } | null = null): st
             <p><a href="/" style="color: var(--accent); font-weight: bold; text-decoration: none; margin-top: 20px; display: inline-block;">&larr; 홈으로 돌아가기</a></p>
         </div>
     `;
-  return renderHTML(errorHtml, user?.username || null);
+  return renderHTML(errorHtml, user?.username || null, 25, 24, {
+    title: "404 - 페이지를 찾을 수 없습니다 | 하이에나뉴스",
+    noindex: true,
+  });
 }
 
 export function renderPage(
@@ -78,7 +82,8 @@ export function renderPage(
   hotTopics: any[] = [],
   page: number = 1,
   topicId: number | null = null,
-  updatedAt: string | null = null
+  updatedAt: string | null = null,
+  topicKeywords: string | null = null
 ): string {
   page = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   let content = "";
@@ -90,15 +95,69 @@ export function renderPage(
     content += `<h2 style="padding: 20px 0; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}${updateInfo}</h2>`;
     content += renderWideNewsList(news);
 
+    let seo: SeoOptions = {
+      title: `${topicName} | 하이에나뉴스`,
+      noindex: !topicId,
+    };
+
     if (topicId) {
       const topicHasMore = news.length === 50;
       const topicPrevUrl = page > 1 ? `/topic/${topicId}?page=${page - 1}` : null;
       const topicNextUrl = topicHasMore ? `/topic/${topicId}?page=${page + 1}` : null;
       const topicFirstUrl = page > 1 ? `/topic/${topicId}?page=1` : null;
       content += renderPagination({ page, hasMore: topicHasMore, prevUrl: topicPrevUrl, nextUrl: topicNextUrl, firstUrl: topicFirstUrl });
+
+      const uniqueSources = Array.from(new Set((news || []).map((n: any) => n.source_name).filter(Boolean)));
+      const sourcesSummary = uniqueSources.length > 0 ? `${uniqueSources.slice(0, 5).join(", ")} 등 ` : "";
+      const kwSummary = topicKeywords ? ` (주요 키워드: ${topicKeywords})` : "";
+      const seoDescription = `${topicName} 이슈에 대한 ${sourcesSummary}언론사별 기사 ${news.length}건을 한눈에 비교해보세요.${kwSummary}`;
+      const canonicalPath = page > 1 ? `/topic/${topicId}?page=${page}` : `/topic/${topicId}`;
+
+      seo = {
+        title: `${topicName} - 언론사별 뉴스 비교 (${news.length}건) | 하이에나뉴스`,
+        description: seoDescription,
+        canonicalPath,
+        ogType: "article",
+        jsonLd: {
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          "name": topicName,
+          "headline": topicName,
+          "url": `https://hy3n4.news${canonicalPath}`,
+          "inLanguage": "ko-KR",
+          "description": seoDescription,
+          ...(updatedAt ? { "dateModified": updatedAt } : {}),
+          ...(topicKeywords ? { "keywords": topicKeywords } : {}),
+          "isPartOf": {
+            "@type": "WebSite",
+            "name": "하이에나뉴스",
+            "url": "https://hy3n4.news/"
+          },
+          "mainEntity": {
+            "@type": "ItemList",
+            "name": `${topicName} 관련 언론사별 기사 목록`,
+            "numberOfItems": news.length,
+            "itemListElement": (news || []).slice(0, 30).map((item: any, idx: number) => ({
+              "@type": "ListItem",
+              "position": idx + 1,
+              "item": {
+                "@type": "NewsArticle",
+                "headline": item.title,
+                "url": item.url || `https://hy3n4.news/go/${item.id}`,
+                "datePublished": item.published_at || item.created_at,
+                ...(item.description ? { "description": String(item.description).slice(0, 200) } : {}),
+                "publisher": {
+                  "@type": "Organization",
+                  "name": item.source_name || "언론사"
+                }
+              }
+            }))
+          }
+        }
+      };
     }
 
-    return renderHTML(content, user?.username, currentLimit, currentTime);
+    return renderHTML(content, user?.username, currentLimit, currentTime, seo);
   }
 
   if (hotTopics && hotTopics.length > 0) {
@@ -151,7 +210,81 @@ export function renderPage(
     content += renderPagination({ page, hasMore, prevUrl, nextUrl, firstUrl });
   }
 
-  return renderHTML(content, user?.username, currentLimit, currentTime);
+  const topTopicTitles = (hotTopics || []).slice(0, 4).map((t: any) => t.title).filter(Boolean);
+  const homeDescription = topTopicTitles.length > 0
+    ? `실시간 한국 뉴스 핫토픽(뜨거운 감자): ${topTopicTitles.join(" · ")} 등. 조선일보, 경향신문, 연합뉴스, JTBC, 동아일보 주요 언론사 헤드라인을 한눈에 비교하세요.`
+    : "조선일보, 경향신문, 연합뉴스, JTBC, 동아일보 등 대한민국 주요 언론사의 실시간 뉴스 헤드라인과 AI 클러스터링 핫토픽(뜨거운 감자)을 한눈에 비교하세요.";
+
+  const homeCanonicalPath = page > 1 ? `/?page=${page}` : "/";
+  const homeJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://hy3n4.news/#website",
+        "name": "하이에나뉴스",
+        "alternateName": ["hy3n4 news", "Hyena News"],
+        "url": "https://hy3n4.news/",
+        "inLanguage": "ko-KR",
+        "description": "대한민국 주요 언론사의 실시간 뉴스와 AI 클러스터링 핫이슈(뜨거운 감자)를 한눈에 비교하는 뉴스 큐레이션 서비스입니다.",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://hy3n4.news/search?q={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      ...(hotTopics && hotTopics.length > 0
+        ? [
+            {
+              "@type": "ItemList",
+              "name": "실시간 뜨거운 감자 (한국 뉴스 핫토픽 Top 10)",
+              "description": "최근 24시간 내 다수 언론사가 집중 보도한 대한민국 주요 뉴스 토픽 클러스터",
+              "numberOfItems": hotTopics.length,
+              "itemListElement": hotTopics.map((t: any, idx: number) => ({
+                "@type": "ListItem",
+                "position": idx + 1,
+                "name": t.title,
+                "url": `https://hy3n4.news/topic/${t.id}`,
+                ...(t.keywords ? { "description": `키워드: ${t.keywords} (관련 기사 ${t.article_count}건)` } : {})
+              }))
+            }
+          ]
+        : []),
+      ...(news && news.length > 0
+        ? [
+            {
+              "@type": "ItemList",
+              "name": "대한민국 주요 언론사 최신 헤드라인",
+              "numberOfItems": Math.min(news.length, 20),
+              "itemListElement": news.slice(0, 20).map((item: any, idx: number) => ({
+                "@type": "ListItem",
+                "position": idx + 1,
+                "item": {
+                  "@type": "NewsArticle",
+                  "headline": item.title,
+                  "url": item.url || `https://hy3n4.news/go/${item.id}`,
+                  "datePublished": item.published_at || item.created_at,
+                  "publisher": {
+                    "@type": "Organization",
+                    "name": item.source_name || "언론사"
+                  }
+                }
+              }))
+            }
+          ]
+        : [])
+    ]
+  };
+
+  return renderHTML(content, user?.username, currentLimit, currentTime, {
+    title: "하이에나뉴스 | 주요 언론사 실시간 헤드라인 & 핫토픽 모아보기",
+    description: homeDescription,
+    canonicalPath: homeCanonicalPath,
+    jsonLd: homeJsonLd,
+  });
 }
 
 function getCookie(request: Request, name: string): string | null {
@@ -160,10 +293,10 @@ function getCookie(request: Request, name: string): string | null {
   return match ? match[1] : null;
 }
 
-const EDGE_CACHE_TTL_SECONDS = 1800; // 30 minutes (matches RSS cron interval */30 * * * *)
-const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300, s-maxage=1800, stale-while-revalidate=1800";
+export const EDGE_CACHE_TTL_SECONDS = 1800; // 30 minutes (matches RSS cron interval */30 * * * *)
+export const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300, s-maxage=1800, stale-while-revalidate=1800";
 
-async function withEdgeCache<T>(
+export async function withEdgeCache<T>(
   cacheKeyUrl: string,
   ttlSeconds: number,
   ctx: ExecutionContext | undefined,
@@ -203,7 +336,164 @@ async function withEdgeCache<T>(
   return data;
 }
 
+export async function fetchNewsCached(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  timeHours: number = 24,
+  limit: number = 10,
+  page: number = 1
+): Promise<NewsRow[]> {
+  const offset = (page - 1) * limit;
+  const upperLimit = page * limit;
+  const newsCacheKey = `https://cache.hy3n4.news/d1/news?time=${timeHours}&limit=${limit}&page=${page}`;
+
+  return withEdgeCache<NewsRow[]>(newsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
+    const now = new Date();
+    const timeAgo = new Date(now.getTime() - timeHours * 60 * 60 * 1000).toISOString();
+
+    const { results } = await env.DB.prepare(`
+        -- NEWS QUERY
+        WITH ranked_news AS (
+            SELECT id, source_id, title, url, description, upvotes, view_count, published_at, created_at,
+                   ROW_NUMBER() OVER (PARTITION BY +source_id ORDER BY published_at DESC) as rn
+            FROM news
+            WHERE published_at >= ?
+        )
+        SELECT 
+            n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
+            s.name as source_name,
+            (SELECT group_concat(t.keywords, ', ') 
+             FROM news_topics nt 
+             JOIN topics t ON nt.topic_id = t.id 
+             WHERE nt.news_id = n.id) as keywords
+        FROM ranked_news n
+        JOIN sources s ON n.source_id = s.id
+        WHERE n.rn > ? AND n.rn <= ?
+        ORDER BY n.published_at DESC;
+      `).bind(timeAgo, offset, upperLimit).all<NewsRow>();
+
+    return results ?? [];
+  });
+}
+
+export async function fetchHotTopicsCached(
+  env: Env,
+  ctx?: ExecutionContext
+): Promise<TopicRow[]> {
+  const topicsCacheKey = `https://cache.hy3n4.news/d1/hot-topics`;
+
+  return withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
+    const { results } = await env.DB.prepare(`
+        -- TOPICS QUERY
+        SELECT 
+            t.id, 
+            t.title, 
+            t.keywords, 
+            COUNT(nt.news_id) as article_count,
+            (COUNT(nt.news_id) * 1.0) / POW(((julianday('now') - julianday(t.updated_at)) * 24) + 2, 1.8) AS trending_score
+        FROM topics t
+        CROSS JOIN news_topics nt ON nt.topic_id = t.id
+        WHERE t.updated_at >= datetime('now', '-24 hours')
+          AND t.created_at >= datetime('now', '-10 days')
+        GROUP BY t.updated_at, t.id
+        HAVING article_count > 1
+        ORDER BY trending_score DESC
+        LIMIT 10;
+      `).all<TopicRow>();
+
+    return results ?? [];
+  });
+}
+
+export async function fetchSitemapTopicsCached(
+  env: Env,
+  ctx?: ExecutionContext
+): Promise<{ id: number; updated_at: string }[]> {
+  const sitemapCacheKey = `https://cache.hy3n4.news/d1/sitemap-topics`;
+
+  return withEdgeCache<{ id: number; updated_at: string }[]>(
+    sitemapCacheKey,
+    EDGE_CACHE_TTL_SECONDS,
+    ctx,
+    async () => {
+      const { results } = await env.DB.prepare(`
+        SELECT id, updated_at
+        FROM topics
+        WHERE updated_at >= datetime('now', '-10 days')
+          AND created_at >= datetime('now', '-10 days')
+        ORDER BY updated_at DESC
+        LIMIT 100;
+      `).all<{ id: number; updated_at: string }>();
+
+      return results ?? [];
+    }
+  );
+}
+
 // --- Routes ---
+
+uiRouter.get("/api/trends", async (_request, env, ctx) => {
+  const [hotTopics, news] = await Promise.all([
+    fetchHotTopicsCached(env, ctx),
+    fetchNewsCached(env, ctx, 24, 10, 1),
+  ]);
+
+  const latestBySource: Record<string, any[]> = {};
+  for (const item of news ?? []) {
+    const src = item.source_name || "Unknown";
+    if (!latestBySource[src]) {
+      latestBySource[src] = [];
+    }
+    if (latestBySource[src].length < 10) {
+      const kwList = item.keywords
+        ? Array.from(new Set(item.keywords.split(",").map((k) => k.trim()).filter(Boolean)))
+        : [];
+      latestBySource[src].push({
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        redirect_url: `https://hy3n4.news/go/${item.id}`,
+        published_at: item.published_at || item.created_at,
+        keywords: kwList,
+      });
+    }
+  }
+
+  const payload = {
+    site: "하이에나뉴스 (hy3n4.news)",
+    description: "대한민국 주요 언론사(조선일보, 경향신문, 연합뉴스, JTBC, 동아일보 등) 실시간 헤드라인 및 AI 클러스터링 핫토픽 트렌드",
+    url: "https://hy3n4.news",
+    language: "ko-KR",
+    generated_at: new Date().toISOString(),
+    hot_topics: (hotTopics ?? []).map((t, index) => ({
+      rank: index + 1,
+      id: t.id,
+      title: t.title,
+      keywords: t.keywords
+        ? Array.from(new Set(t.keywords.split(",").map((k) => k.trim()).filter(Boolean)))
+        : [],
+      article_count: t.article_count,
+      trending_score: typeof t.trending_score === "number" ? Number(t.trending_score.toFixed(4)) : undefined,
+      url: `https://hy3n4.news/topic/${t.id}`,
+    })),
+    latest_headlines_by_source: latestBySource,
+    endpoints: {
+      llms_txt: "https://hy3n4.news/llms.txt",
+      llms_full_txt: "https://hy3n4.news/llms-full.txt",
+      topic_detail: "https://hy3n4.news/topic/{id}",
+      search_html: "https://hy3n4.news/search?q={query}",
+      search_api: "https://hy3n4.news/api/search?q={query}",
+    },
+  };
+
+  return new Response(JSON.stringify(payload, null, 2), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": PUBLIC_HTML_CACHE_CONTROL,
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+});
 
 uiRouter.get("/search", async (request, env) => {
   const url = new URL(request.url);
@@ -285,9 +575,24 @@ uiRouter.get("/search", async (request, env) => {
   }
 
   const content = renderSearchResults(q, topics, newsByTopic, page, hasMore);
-  return new Response(renderHTML(content, user?.username || null), {
-    headers: { "Content-Type": "text/html; charset=utf-8" }
-  });
+  const searchTitle = q ? `"${q}" 뉴스 토픽 검색 결과 | 하이에나뉴스` : "최신 뉴스 토픽 목록 | 하이에나뉴스";
+  const searchDescription = q
+    ? `"${q}" 관련 대한민국 주요 언론사 뉴스 토픽 클러스터 및 기사 비교 검색 결과입니다.`
+    : "대한민국 주요 언론사 기사를 AI로 클러스터링한 최신 뉴스 토픽 목록입니다.";
+  const searchCanonical = q
+    ? `/search?q=${encodeURIComponent(q)}${page > 1 ? `&page=${page}` : ""}`
+    : `/search${page > 1 ? `?page=${page}` : ""}`;
+
+  return new Response(
+    renderHTML(content, user?.username || null, 25, 24, {
+      title: searchTitle,
+      description: searchDescription,
+      canonicalPath: searchCanonical,
+    }),
+    {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    }
+  );
 });
 
 uiRouter.get("/", async (request, env, ctx) => {
@@ -307,63 +612,9 @@ uiRouter.get("/", async (request, env, ctx) => {
   const rawTime = parseInt(queryTime || "24", 10);
   const timeHours = Number.isFinite(rawTime) && rawTime > 0 ? Math.min(Math.floor(rawTime), 168) : 24;
 
-  const offset = (page - 1) * limit;
-  const upperLimit = page * limit;
-
-  // Fetch news (cached at Edge for 10m; SQL uses PARTITION BY +source_id to force idx_news_feed_composite range scan)
-  const newsCacheKey = `https://cache.hy3n4.news/d1/news?time=${timeHours}&limit=${limit}&page=${page}`;
-  const topicsCacheKey = `https://cache.hy3n4.news/d1/hot-topics`;
-
   const [news, hotTopics] = await Promise.all([
-    withEdgeCache<NewsRow[]>(newsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
-      const now = new Date();
-      const timeAgo = new Date(now.getTime() - timeHours * 60 * 60 * 1000).toISOString();
-
-      const { results } = await env.DB.prepare(`
-        -- NEWS QUERY
-        WITH ranked_news AS (
-            SELECT id, source_id, title, url, description, upvotes, view_count, published_at, created_at,
-                   ROW_NUMBER() OVER (PARTITION BY +source_id ORDER BY published_at DESC) as rn
-            FROM news
-            WHERE published_at >= ?
-        )
-        SELECT 
-            n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
-            s.name as source_name,
-            (SELECT group_concat(t.keywords, ', ') 
-             FROM news_topics nt 
-             JOIN topics t ON nt.topic_id = t.id 
-             WHERE nt.news_id = n.id) as keywords
-        FROM ranked_news n
-        JOIN sources s ON n.source_id = s.id
-        WHERE n.rn > ? AND n.rn <= ?
-        ORDER BY n.published_at DESC;
-      `).bind(timeAgo, offset, upperLimit).all<NewsRow>();
-
-      return results ?? [];
-    }),
-
-    withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
-      const { results } = await env.DB.prepare(`
-        -- TOPICS QUERY
-        SELECT 
-            t.id, 
-            t.title, 
-            t.keywords, 
-            COUNT(nt.news_id) as article_count,
-            (COUNT(nt.news_id) * 1.0) / POW(((julianday('now') - julianday(t.updated_at)) * 24) + 2, 1.8) AS trending_score
-        FROM topics t
-        CROSS JOIN news_topics nt ON nt.topic_id = t.id
-        WHERE t.updated_at >= datetime('now', '-24 hours')
-          AND t.created_at >= datetime('now', '-10 days')
-        GROUP BY t.updated_at, t.id
-        HAVING article_count > 1
-        ORDER BY trending_score DESC
-        LIMIT 10;
-      `).all<TopicRow>();
-
-      return results ?? [];
-    }),
+    fetchNewsCached(env, ctx, timeHours, limit, page),
+    fetchHotTopicsCached(env, ctx),
   ]);
 
   const ranked = [...(news ?? [])].sort((a, b) => {
@@ -429,7 +680,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
   });
 
   if (!topicData.topicRow) {
-    return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html" } });
+    return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 
   const html = renderPage(
@@ -441,7 +692,8 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     [],
     page,
     topicId,
-    topicData.topicRow.updated_at
+    topicData.topicRow.updated_at,
+    topicData.topicRow.keywords
   );
   return new Response(html, {
     headers: {
@@ -484,8 +736,12 @@ uiRouter.get("/guidelines", async (request, env) => {
             </ul>
         </div>
     `;
-  const html = renderHTML(content, user?.username);
-  return new Response(html, { headers: { "Content-Type": "text/html" } });
+  const html = renderHTML(content, user?.username, 25, 24, {
+    title: "가이드라인 | 하이에나뉴스",
+    description: "하이에나뉴스의 공정한 뉴스 큐레이션 및 AI 토픽 클러스터링 가이드라인입니다.",
+    canonicalPath: "/guidelines",
+  });
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });
 
 uiRouter.get("/legal", async (request, env) => {
@@ -498,8 +754,12 @@ uiRouter.get("/legal", async (request, env) => {
             <p style="margin-top: 10px;">본 서비스는 링크 제공 과정에서 어떠한 기사 내용도 변조하거나 직접 호스팅하지 않습니다.</p>
         </div>
     `;
-  const html = renderHTML(content, user?.username);
-  return new Response(html, { headers: { "Content-Type": "text/html" } });
+  const html = renderHTML(content, user?.username, 25, 24, {
+    title: "법적고지 | 하이에나뉴스",
+    description: "하이에나뉴스 RSS 피드 기반 뉴스 링크 서비스 법적고지 및 저작권 안내입니다.",
+    canonicalPath: "/legal",
+  });
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });
 
 uiRouter.get(/^\/go\/(\d+)$/, async (request, env, ctx, match) => {

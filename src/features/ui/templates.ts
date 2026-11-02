@@ -676,7 +676,22 @@ export const CSS_STYLES = `
     }
   `;
 
-export function renderHTML(content: string, user: string | null = null, currentLimit: number = 25, currentTime: number = 24) {
+export interface SeoOptions {
+  title?: string;
+  description?: string;
+  canonicalPath?: string;
+  ogType?: string;
+  jsonLd?: Record<string, any> | Record<string, any>[];
+  noindex?: boolean;
+}
+
+export function renderHTML(
+  content: string,
+  user: string | null = null,
+  currentLimit: number = 25,
+  currentTime: number = 24,
+  seo: SeoOptions = {}
+) {
   const authHtml = user
     ? `<div class="auth-area"><a href="/user" class="user-name">${user}</a> | <a href="/logout">로그아웃</a></div>`
     : `<div class="auth-area"><a href="/login">login</a></div>`;
@@ -691,35 +706,62 @@ export function renderHTML(content: string, user: string | null = null, currentL
     `<a href="/?limit=${currentLimit}&time=${t}" class="filter-btn ${t === currentTime ? 'active' : ''}">${t}시간</a>`
   ).join('')}<!--/times-->`;
 
+  const pageTitle = seo.title || "하이에나뉴스 | 주요 언론사 실시간 헤드라인 & 핫토픽 모아보기";
+  const pageDescription =
+    seo.description ||
+    "조선일보, 경향신문, 연합뉴스, JTBC, 동아일보 등 대한민국 주요 언론사의 실시간 뉴스 헤드라인과 AI 클러스터링 핫토픽(뜨거운 감자)을 한눈에 비교하세요.";
+  const canonicalPath = seo.canonicalPath ? (seo.canonicalPath.startsWith("/") ? seo.canonicalPath : `/${seo.canonicalPath}`) : "/";
+  const canonicalUrl = `https://hy3n4.news${canonicalPath}`;
+  const ogType = seo.ogType || "website";
+
+  const defaultJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "하이에나뉴스",
+    "alternateName": ["hy3n4 news", "Hyena News"],
+    "url": "https://hy3n4.news/",
+    "inLanguage": "ko-KR",
+    "description": "대한민국 주요 언론사의 실시간 뉴스와 AI 클러스터링 핫이슈(뜨거운 감자)를 한눈에 비교하는 뉴스 큐레이션 서비스입니다.",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "https://hy3n4.news/search?q={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    }
+  };
+
+  const jsonLdPayload = seo.jsonLd || defaultJsonLd;
+  const jsonLdScript = JSON.stringify(jsonLdPayload).replace(/</g, "\\u003c");
+  const robotsMeta = seo.noindex
+    ? `<meta name="robots" content="noindex, follow">`
+    : `<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">`;
+
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>하이에나뉴스 | 주요 언론사 실시간 헤드라인 모아보기</title>
-  <meta name="description" content="조선 일보, 중앙 일보, 동아 일보, 한겨레 등 한국 주요 언론사의 오늘 경제 뉴스 기사 헤드라인을 한 곳에서 모아보세요.">
-  <meta property="og:title" content="하이에나 뉴스">
-  <meta property="og:description" content="언론사별 헤드라인을 한눈에 비교. 같은 사건을 각 언론이 어떻게 다루는지 바로 확인하세요.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://hy3n4-news.zgp7777.workers.dev/">
+  <title>${escapeHtml(pageTitle)}</title>
+  <meta name="description" content="${escapeHtml(pageDescription)}">
+  ${robotsMeta}
+  <meta property="og:title" content="${escapeHtml(pageTitle)}">
+  <meta property="og:description" content="${escapeHtml(pageDescription)}">
+  <meta property="og:type" content="${escapeHtml(ogType)}">
+  <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
   <meta property="og:site_name" content="하이에나뉴스">
   <meta property="og:locale" content="ko_KR">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="하이에나뉴스 | 주요 언론사 실시간 헤드라인 모아보기">
-  <meta name="twitter:description" content="대한민국 주요 언론사의 뉴스를 한눈에 파악하는 가장 빠른 방법.">
-  <link rel="canonical" href="https://hy3n4.news/">
+  <meta name="twitter:title" content="${escapeHtml(pageTitle)}">
+  <meta name="twitter:description" content="${escapeHtml(pageDescription)}">
+  <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
+  <link rel="alternate" type="text/markdown" href="https://hy3n4.news/llms.txt" title="LLM Context (Korean News Trends)">
+  <link rel="alternate" type="text/markdown" href="https://hy3n4.news/llms-full.txt" title="LLM Full Context (Hot Topics & Headlines)">
+  <link rel="alternate" type="application/json" href="https://hy3n4.news/api/trends" title="Korean News Trends JSON API">
   <link rel="icon" type="image/svg+xml" href="/hyena.svg">
 
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "하이에나뉴스",
-    "alternateName": "hy3n4 news",
-    "url": "https://hy3n4-news.zgp7777.workers.dev/",
-    "description": "대한민국 주요 언론사의 실시간 뉴스와 핫이슈를 모아보는 서비스입니다."
-  }
-  </script>
+  <script type="application/ld+json">${jsonLdScript}</script>
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <style>
 

@@ -29,7 +29,7 @@ export interface TopicRow {
 }
 
 // Helper: 404 Page Template
-export function renderNotFoundPage(user: { username: string } | null = null): string {
+export function renderNotFoundPage(user: { username: string; has_feedback?: number } | null = null): string {
   const errorHtml = `
         <div style="text-align: center; margin-top: 40px;">
             <h2>404 - Page Not Found</h2>
@@ -70,6 +70,7 @@ export function renderNotFoundPage(user: { username: string } | null = null): st
   return renderHTML(errorHtml, user?.username || null, 25, 24, {
     title: "404 - 페이지를 찾을 수 없습니다 | 하이에나뉴스",
     noindex: true,
+    hasFeedback: Boolean(user?.has_feedback),
   });
 }
 
@@ -98,6 +99,7 @@ export function renderPage(
     let seo: SeoOptions = {
       title: `${topicName} | 하이에나뉴스`,
       noindex: !topicId,
+      hasFeedback: Boolean(user?.has_feedback),
     };
 
     if (topicId) {
@@ -118,6 +120,7 @@ export function renderPage(
         description: seoDescription,
         canonicalPath,
         ogType: "article",
+        hasFeedback: Boolean(user?.has_feedback),
         jsonLd: {
           "@context": "https://schema.org",
           "@type": "CollectionPage",
@@ -284,6 +287,7 @@ export function renderPage(
     description: homeDescription,
     canonicalPath: homeCanonicalPath,
     jsonLd: homeJsonLd,
+    hasFeedback: Boolean(user?.has_feedback),
   });
 }
 
@@ -588,6 +592,7 @@ uiRouter.get("/search", async (request, env) => {
       title: searchTitle,
       description: searchDescription,
       canonicalPath: searchCanonical,
+      hasFeedback: Boolean(user?.has_feedback),
     }),
     {
       headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -629,10 +634,12 @@ uiRouter.get("/", async (request, env, ctx) => {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 
+  const isLocalhost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+
   if (queryLimit) {
     response.headers.append("Set-Cookie", `pref_limit=${limit}; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
     response.headers.set("Cache-Control", "private, no-cache");
-  } else if (user) {
+  } else if (user || isLocalhost) {
     response.headers.set("Cache-Control", "private, no-cache");
   } else {
     response.headers.set("Cache-Control", PUBLIC_HTML_CACHE_CONTROL);
@@ -740,6 +747,7 @@ uiRouter.get("/guidelines", async (request, env) => {
     title: "가이드라인 | 하이에나뉴스",
     description: "하이에나뉴스의 공정한 뉴스 큐레이션 및 AI 토픽 클러스터링 가이드라인입니다.",
     canonicalPath: "/guidelines",
+    hasFeedback: Boolean(user?.has_feedback),
   });
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });
@@ -758,6 +766,7 @@ uiRouter.get("/legal", async (request, env) => {
     title: "법적고지 | 하이에나뉴스",
     description: "하이에나뉴스 RSS 피드 기반 뉴스 링크 서비스 법적고지 및 저작권 안내입니다.",
     canonicalPath: "/legal",
+    hasFeedback: Boolean(user?.has_feedback),
   });
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });

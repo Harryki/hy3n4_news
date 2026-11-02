@@ -24,10 +24,11 @@ interface GoogleUserInfo {
   picture?: string;
 }
 
-interface SessionUser {
+export interface SessionUser {
   id: number;
   username: string;
   email: string | null;
+  has_feedback?: number;
 }
 
 const OAUTH_REDIRECT_PATH = "/auth/callback";
@@ -172,7 +173,8 @@ export async function getSessionUser(request: Request, env: Env): Promise<Sessio
   if (!token) return null;
 
   const row = await env.DB.prepare(`
-    SELECT u.id, u.username, u.email
+    SELECT u.id, u.username, u.email,
+           EXISTS(SELECT 1 FROM feedbacks f WHERE f.user_id = u.id) as has_feedback
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token = ? AND s.expires_at > datetime('now')

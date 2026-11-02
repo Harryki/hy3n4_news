@@ -99,3 +99,20 @@ CREATE INDEX IF NOT EXISTS idx_topics_recent_full ON topics(updated_at DESC, id,
 CREATE INDEX IF NOT EXISTS idx_news_upvotes_created ON news(upvotes DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_news_source ON news(source_id);
 CREATE INDEX IF NOT EXISTS idx_clicks_news ON clicks(news_id);
+
+-- User Feedbacks: Survey popup responses
+CREATE TABLE IF NOT EXISTS feedbacks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER UNIQUE,
+  visitor_id TEXT,
+  visit_purposes TEXT NOT NULL,
+  desired_features TEXT NOT NULL,
+  comment TEXT,
+  page_path TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedbacks_created_at ON feedbacks(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedbacks_visitor_id ON feedbacks(visitor_id);

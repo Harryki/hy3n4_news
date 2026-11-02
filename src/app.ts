@@ -129,7 +129,8 @@ Allow: /api/trends
 Allow: /llms.txt
 Allow: /llms-full.txt
 Disallow: /go/
-Disallow: /auth/`
+Disallow: /auth/
+Disallow: /api/feedback`
     )
     .join("\n\n");
 
@@ -139,6 +140,7 @@ User-agent: *
 Allow: /
 Disallow: /go/
 Disallow: /auth/
+Disallow: /api/feedback
 
 # AI Agent & LLM Context Endpoints
 # LLMs Briefing: https://hy3n4.news/llms.txt

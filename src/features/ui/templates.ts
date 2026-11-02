@@ -674,6 +674,197 @@ export const CSS_STYLES = `
       color: #828282;
       margin-top: 2px;
     }
+
+    /* Feedback Modal Styles */
+    .fb-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(87, 53, 43, 0.45);
+      backdrop-filter: blur(2px);
+      z-index: 2500;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .fb-overlay.open {
+      display: flex;
+    }
+
+    .fb-card {
+      background: #FFF9ED;
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(87, 53, 43, 0.22);
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 22px 24px;
+      color: var(--text);
+      position: relative;
+    }
+
+    .fb-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+      border-bottom: 1.5px dashed rgba(87, 53, 43, 0.2);
+      padding-bottom: 12px;
+    }
+
+    .fb-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--border);
+      line-height: 1.3;
+    }
+
+    .fb-subtitle {
+      font-size: 12.5px;
+      color: var(--secondary);
+      margin-top: 4px;
+    }
+
+    .fb-close {
+      background: none;
+      border: none;
+      color: var(--secondary);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .fb-section {
+      margin-bottom: 16px;
+    }
+
+    .fb-question {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--border);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .fb-question-sub {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--secondary);
+    }
+
+    .fb-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .fb-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1.5px solid rgba(87, 53, 43, 0.2);
+      background: #FFFDF8;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .fb-chip:hover {
+      border-color: var(--accent);
+      background: rgba(229, 166, 87, 0.08);
+    }
+
+    .fb-chip input[type="checkbox"] {
+      accent-color: var(--border);
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .fb-chip.selected {
+      border-color: var(--border);
+      background: rgba(229, 166, 87, 0.22);
+      font-weight: 600;
+    }
+
+    .fb-textarea {
+      width: 100%;
+      min-height: 70px;
+      border: 1.5px solid rgba(87, 53, 43, 0.25);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #FFFDF8;
+      color: var(--text);
+      resize: vertical;
+      outline: none;
+    }
+
+    .fb-textarea:focus {
+      border-color: var(--border);
+    }
+
+    .fb-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .fb-btn-snooze {
+      background: transparent;
+      border: 1px solid rgba(87, 53, 43, 0.25);
+      color: var(--secondary);
+      padding: 9px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .fb-btn-submit {
+      background: var(--border);
+      border: none;
+      color: var(--bg);
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .fb-btn-submit:hover {
+      background: var(--secondary);
+    }
+
+    .fb-btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .fb-msg {
+      font-size: 12.5px;
+      margin-top: 8px;
+      text-align: right;
+      display: none;
+    }
   `;
 
 export interface SeoOptions {
@@ -683,6 +874,7 @@ export interface SeoOptions {
   ogType?: string;
   jsonLd?: Record<string, any> | Record<string, any>[];
   noindex?: boolean;
+  hasFeedback?: boolean;
 }
 
 export function renderHTML(
@@ -793,6 +985,9 @@ export function renderHTML(
         </a>
       </h1>
       <div class="header-right">
+        <button id="header-feedback-btn" class="icon-btn" title="피드백 보내기">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </button>
         <button id="search-open-btn" class="icon-btn" title="검색">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         </button>
@@ -833,6 +1028,7 @@ export function renderHTML(
         <div class="sidebar-divider"></div>
         <a href="/guidelines" class="sidebar-link">가이드라인 (Guidelines)</a>
         <a href="/legal" class="sidebar-link">법적고지 (Legal)</a>
+        <a href="#" id="sidebar-feedback-btn" class="sidebar-link">💬 피드백 보내기</a>
         <a href="mailto:hy3n4news@gmail.com" class="sidebar-link">Contact</a>
         
         <div style="margin-top: auto;">
@@ -844,7 +1040,58 @@ export function renderHTML(
       </div>
     </aside>
 
+    <!-- Feedback Popup Modal -->
+    <div id="feedback-modal" class="fb-overlay" role="dialog" aria-labelledby="fb-modal-title" aria-modal="true">
+      <div class="fb-card">
+        <div class="fb-header">
+          <div>
+            <div id="fb-modal-title" class="fb-title">하이에나뉴스, 어떠셨나요? 🐾</div>
+            <div class="fb-subtitle">10초만 시간 내어주시면 더 좋은 뉴스 서비스로 보답할게요!</div>
+          </div>
+          <button type="button" id="fb-close-btn" class="fb-close" title="닫기">&times;</button>
+        </div>
+
+        <form id="feedback-form">
+          <div class="fb-section">
+            <div class="fb-question">1. 방문하신 주된 목적은 무엇인가요? <span class="fb-question-sub">(복수 선택 가능)</span></div>
+            <div class="fb-options">
+              <label class="fb-chip"><input type="checkbox" name="visit_purposes" value="hot_issues"> <span>📰 실시간 주요 뉴스·핫이슈('뜨거운 감자') 빠른 파악</span></label>
+              <label class="fb-chip"><input type="checkbox" name="visit_purposes" value="compare_press"> <span>⚖️ 같은 사건에 대한 언론사별 논조·헤드라인 비교</span></label>
+              <label class="fb-chip"><input type="checkbox" name="visit_purposes" value="search_topic"> <span>🔍 특정 키워드/이슈의 과거~현재 기사 흐름 검색</span></label>
+              <label class="fb-chip"><input type="checkbox" name="visit_purposes" value="work_invest"> <span>💼 경제·산업·트렌드 모니터링 (업무/투자 참고)</span></label>
+              <label class="fb-chip"><input type="checkbox" name="visit_purposes" value="browsing"> <span>👀 우연히 방문 / 둘러보는 중</span></label>
+            </div>
+          </div>
+
+          <div class="fb-section">
+            <div class="fb-question">2. 앞으로 가장 추가되었으면 하는 기능은? <span class="fb-question-sub">(복수 선택 가능)</span></div>
+            <div class="fb-options">
+              <label class="fb-chip"><input type="checkbox" name="desired_features" value="ai_summary"> <span>🤖 토픽별 AI 3줄 요약 및 언론사별 핵심 논점 비교</span></label>
+              <label class="fb-chip"><input type="checkbox" name="desired_features" value="custom_filter"> <span>🏛️ 언론사 추가 및 내 관심 언론사/카테고리 필터링</span></label>
+              <label class="fb-chip"><input type="checkbox" name="desired_features" value="keyword_alert"> <span>🔔 관심 키워드·핫토픽 알림 (이메일/텔레그램/웹푸시)</span></label>
+              <label class="fb-chip"><input type="checkbox" name="desired_features" value="bias_chart"> <span>📊 언론사별 성향 분석 및 보도량 추이 그래프</span></label>
+              <label class="fb-chip"><input type="checkbox" name="desired_features" value="community"> <span>💬 토픽별 유저 댓글·토론 또는 투표 기능 강화</span></label>
+            </div>
+          </div>
+
+          <div class="fb-section" style="margin-bottom: 8px;">
+            <div class="fb-question">3. 자유로운 의견을 남겨주세요 <span class="fb-question-sub">(선택 사항)</span></div>
+            <textarea id="fb-comment" name="comment" class="fb-textarea" maxlength="500" placeholder="불편했던 점, 추가되었으면 하는 언론사나 기능 등을 자유롭게 적어주세요! (최대 500자)"></textarea>
+          </div>
+
+          <div id="fb-status-msg" class="fb-msg"></div>
+
+          <div class="fb-actions">
+            <button type="button" id="fb-snooze-btn" class="fb-btn-snooze">다음에 할게요</button>
+            <button type="submit" id="fb-submit-btn" class="fb-btn-submit">의견 보내기</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <script>
+      window.__HY3N4_FB_DONE = ${seo.hasFeedback ? "true" : "false"};
+
       // Search Modal
       const modal = document.getElementById('search-modal');
       const openBtn = document.getElementById('search-open-btn');
@@ -881,15 +1128,167 @@ export function renderHTML(
       sidebarCloseBtn.onclick = () => toggleSidebar(false);
       sidebarOverlay.onclick = () => toggleSidebar(false);
 
+      // Feedback Modal Logic
+      const fbModal = document.getElementById('feedback-modal');
+      const fbForm = document.getElementById('feedback-form');
+      const fbCloseBtn = document.getElementById('fb-close-btn');
+      const fbSnoozeBtn = document.getElementById('fb-snooze-btn');
+      const fbSubmitBtn = document.getElementById('fb-submit-btn');
+      const fbStatusMsg = document.getElementById('fb-status-msg');
+      const headerFbBtn = document.getElementById('header-feedback-btn');
+      const sidebarFbBtn = document.getElementById('sidebar-feedback-btn');
+      const footerFbBtn = document.getElementById('footer-feedback-btn');
+      const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const forceFbOpen = new URLSearchParams(window.location.search).get('fb') === '1';
+
+      const hasCookie = (name) => document.cookie.split(';').some((c) => c.trim().startsWith(name + '='));
+      const setCookie = (name, val, maxAgeSec) => {
+        document.cookie = name + '=' + val + '; Path=/; Max-Age=' + maxAgeSec + '; SameSite=Lax';
+      };
+
+      if (window.__HY3N4_FB_DONE) {
+        try { localStorage.setItem('hy3n4_fb_done', '1'); } catch (e) {}
+        if (!hasCookie('hy3n4_fb_done')) {
+          setCookie('hy3n4_fb_done', '1', 31536000);
+        }
+      }
+
+      const isFbDone = () => {
+        try {
+          if (localStorage.getItem('hy3n4_fb_done') === '1') return true;
+        } catch (e) {}
+        return window.__HY3N4_FB_DONE || hasCookie('hy3n4_fb_done');
+      };
+
+      const isFbSnoozed = () => {
+        if (isLocalDev) return false;
+        try {
+          const until = parseInt(localStorage.getItem('hy3n4_fb_snooze_until') || '0', 10);
+          if (until > Date.now()) return true;
+        } catch (e) {}
+        return hasCookie('hy3n4_fb_snooze');
+      };
+
+      const openFeedbackModal = () => {
+        fbModal.classList.add('open');
+        document.body.style.overflow = 'hidden';
+      };
+
+      const closeFeedbackModal = (snooze) => {
+        fbModal.classList.remove('open');
+        document.body.style.overflow = '';
+        if (snooze && !isFbDone() && !isLocalDev) {
+          const sevenDaysSec = 60 * 60 * 24 * 7;
+          setCookie('hy3n4_fb_snooze', '1', sevenDaysSec);
+          try {
+            localStorage.setItem('hy3n4_fb_snooze_until', String(Date.now() + sevenDaysSec * 1000));
+          } catch (e) {}
+        }
+      };
+
+      document.querySelectorAll('.fb-chip input[type="checkbox"]').forEach((cb) => {
+        cb.addEventListener('change', () => {
+          cb.closest('.fb-chip').classList.toggle('selected', cb.checked);
+        });
+      });
+
+      fbCloseBtn.onclick = () => closeFeedbackModal(true);
+      fbSnoozeBtn.onclick = () => closeFeedbackModal(true);
+      fbModal.onclick = (e) => {
+        if (e.target === fbModal) closeFeedbackModal(true);
+      };
+
+      if (headerFbBtn) {
+        headerFbBtn.onclick = (e) => {
+          e.preventDefault();
+          openFeedbackModal();
+        };
+      }
+
+      if (sidebarFbBtn) {
+        sidebarFbBtn.onclick = (e) => {
+          e.preventDefault();
+          toggleSidebar(false);
+          openFeedbackModal();
+        };
+      }
+
+      if (footerFbBtn) {
+        footerFbBtn.onclick = (e) => {
+          e.preventDefault();
+          openFeedbackModal();
+        };
+      }
+
+      fbForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const purposes = Array.from(fbForm.querySelectorAll('input[name="visit_purposes"]:checked')).map((el) => el.value);
+        const features = Array.from(fbForm.querySelectorAll('input[name="desired_features"]:checked')).map((el) => el.value);
+        const comment = document.getElementById('fb-comment').value.trim();
+
+        if (purposes.length === 0 && features.length === 0 && !comment) {
+          fbStatusMsg.style.display = 'block';
+          fbStatusMsg.style.color = '#d9534f';
+          fbStatusMsg.textContent = '최소 한 가지 이상의 항목을 선택하거나 의견을 입력해주세요.';
+          return;
+        }
+
+        fbSubmitBtn.disabled = true;
+        fbSubmitBtn.textContent = '전송 중...';
+        fbStatusMsg.style.display = 'none';
+
+        try {
+          const res = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              visit_purposes: purposes,
+              desired_features: features,
+              comment,
+              page_path: window.location.pathname
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.ok) {
+            try { localStorage.setItem('hy3n4_fb_done', '1'); } catch (err) {}
+            setCookie('hy3n4_fb_done', '1', 31536000);
+            fbStatusMsg.style.display = 'block';
+            fbStatusMsg.style.color = '#2b7a3e';
+            fbStatusMsg.style.fontWeight = '700';
+            fbStatusMsg.textContent = '🎉 ' + (data.message || '소중한 피드백 감사합니다!');
+            fbSubmitBtn.textContent = '완료!';
+            setTimeout(() => closeFeedbackModal(false), 1200);
+          } else {
+            fbStatusMsg.style.display = 'block';
+            fbStatusMsg.style.color = '#d9534f';
+            fbStatusMsg.textContent = data.error || '오류가 발생했습니다.';
+            fbSubmitBtn.disabled = false;
+            fbSubmitBtn.textContent = '의견 보내기';
+          }
+        } catch (err) {
+          fbStatusMsg.style.display = 'block';
+          fbStatusMsg.style.color = '#d9534f';
+          fbStatusMsg.textContent = '네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+          fbSubmitBtn.disabled = false;
+          fbSubmitBtn.textContent = '의견 보내기';
+        }
+      };
+
+      // Auto-trigger popup immediately if not done and not snoozed (or forced via ?fb=1)
+      if (forceFbOpen || (!isFbDone() && !isFbSnoozed())) {
+        openFeedbackModal();
+      }
+
       window.onkeydown = (e) => {
         if (e.key === 'Escape') {
           modal.style.display = 'none';
           toggleSidebar(false);
+          if (fbModal.classList.contains('open')) closeFeedbackModal(true);
         }
       };
     </script>
     <footer>
-      <a href="/guidelines">가이드라인 (Guidelines)</a> | <a href="/legal">법적고지 (Legal)</a> | <a href="mailto:hy3n4news@gmail.com">Contact</a>
+      <a href="/guidelines">가이드라인 (Guidelines)</a> | <a href="/legal">법적고지 (Legal)</a> | <a href="#" id="footer-feedback-btn">피드백 보내기</a> | <a href="mailto:hy3n4news@gmail.com">Contact</a>
     </footer>
   </div>
 </body>

@@ -126,7 +126,7 @@ function getCommitTimeline() {
 
   // Identify D1 optimization commits (starting from dd72f60 on 2026-10-29 onwards)
   const perfCommitsRaw = execSync(
-    'git log --since="2026-10-29T00:00:00Z" --pretty=format:"%h" -- src/features/ui/router.ts src/features/ai/queue.ts schema.sql',
+    'git log --since="2026-10-29T00:00:00Z" --grep="^perf" --pretty=format:"%h"',
     { encoding: "utf8" }
   )
     .trim()
@@ -392,8 +392,6 @@ function matchesCommitVariant(category, variant, commitIdx) {
 async function main() {
   const args = process.argv.slice(2);
   const noCache = args.includes("--no-cache");
-  const mdArg = args.find((a) => a.startsWith("--md="));
-  const mdPath = mdArg ? mdArg.split("=")[1] : "d1-optimization-report.md";
 
   const commits = getCommitTimeline();
   const cache = loadCache();
@@ -566,23 +564,6 @@ async function main() {
     );
   });
 
-  let md = `# 📊 D1 쿼리 최적화 커밋별 추이 리포트 (1시간 평균)\n\n`;
-  md += `> **생성 시각**: \`${new Date().toISOString()}\`  \n`;
-  md += `> **D1 Free Tier 일일 한도**: \`5,000,000 rows read / 24h\` (시간당 평균 \`208,333 rows/hr\` 이하 유지 필요)\n\n`;
-
-  md += `## 1. 커밋 타임라인\n\n`;
-  md += `| 단계 | 커밋 | 배포 시각 (UTC) | 측정 구간 (시간) | 설명 |\n`;
-  md += `| :--- | :--- | :--- | :---: | :--- |\n`;
-  commits.forEach((c, i) => {
-    const tag = c.isRecentRolling
-      ? "현재 최근 24h"
-      : i === 0
-      ? "Baseline (최적화 전)"
-      : `${i}차 최적화`;
-    md += `| **${tag}** | \`${c.short}\` | \`${c.dateIso.slice(0, 16).replace("T", " ")}Z\` | ${c.durationHours.toFixed(1)}h | ${c.subject} |\n`;
-  });
-  md += `\n---\n\n## 2. 쿼리별 1시간 평균 및 1회 실행당 효율 비교\n\n`;
-
   for (const cat of CATEGORIES) {
     const rows = reportData[cat.key];
     console.log(`\n------------------------------------------------------------------------------------------------------------`);
@@ -592,10 +573,6 @@ async function main() {
       `${pad("Commit", 16)} | ${pad("Window", 7, "right")} | ${pad("Execs/hr", 9, "right")} | ${pad("Rows/hr", 11, "right")} | ${pad("Rows/Exec", 10, "right")} | ${pad("Latency", 9, "right")} | ${pad("Rows/Exec 증감", 14, "right")} | ${pad("Rows/hr 증감", 12, "right")}`
     );
     console.log("-".repeat(108));
-
-    md += `### ${cat.title}\n\n`;
-    md += `| 커밋 (단계) | 측정 시간 | 시간당 실행 (\`Execs/hr\`) | **시간당 읽은 행 (\`Rows/hr\`)** | **1회당 읽은 행 (\`Rows/Exec\`)** | 평균 지연시간 | 1회당 \`Rows\` 증감 | **시간당 \`Rows/hr\` 증감** |\n`;
-    md += `| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n`;
 
     const baseRowsPerExec = rows[0]?.rowsPerExec;
     const baseRowsPerHr = rows[0]?.rowsReadPerHr;
@@ -638,18 +615,10 @@ async function main() {
       console.log(
         `${pad(label, 16)} | ${pad(r.effectiveHours.toFixed(1) + "h", 7, "right")} | ${pad(execHrStr, 9, "right")} | ${pad(rowsHrStr, 11, "right")} | ${pad(rowsExecStr, 10, "right")} | ${pad(latencyStr, 9, "right")} | ${pad(deltaExecStr, 14, "right")} | ${pad(deltaHrStr, 12, "right")}`
       );
-
-      md += `| \`${r.commit.short}\` (${stage}) | ${r.effectiveHours.toFixed(1)}h | ${execHrStr} | **${rowsHrStr}** | **${rowsExecStr}** | ${latencyStr} | ${deltaExecStr} | **${deltaHrStr}** |\n`;
     });
-    md += `\n`;
   }
 
   // --- Summary of Daily Free Tier Projection ---
-  md += `---\n\n## 3. 24시간 환산 D1 Free Tier (5,000,000 rows/day) 소진율 시뮬레이션\n\n`;
-  md += `> 전 세계 Cloudflare 엣지 PoP 평균 3곳에서 캐시 미스가 발생한다고 가정할 때의 24시간 예상 \`rows_read\` 합계입니다.\n\n`;
-  md += `| 커밋 단계 | 캐시 TTL | 시간당 예상 실행 (3 PoPs) | \`TOPICS QUERY\` (24h) | \`NEWS QUERY\` (24h) | 일일 총 예상 \`Rows Read\` | Free Tier (5M) 대비 |\n`;
-  md += `| :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n`;
-
   const topicsV1 = reportData.TOPICS_QUERY[0]?.rowsPerExec || 8895;
   const topicsV2 = reportData.TOPICS_QUERY[1]?.rowsPerExec || 12729;
   const topicsV3 = reportData.TOPICS_QUERY[2]?.rowsPerExec || 1084;
@@ -658,38 +627,43 @@ async function main() {
 
   const projections = [
     {
-      name: `\`${commits[0]?.short || "f2a7b70"}\` (최적화 전)`,
-      ttl: "없음 (매 요청 실행)",
-      execsPerHr: 48.0, // ~1,150 req/day
+      name: `${commits[0]?.short || "f2a7b70"} (base: 캐시없음)`,
+      ttl: "없음",
+      execsPerHr: 48.0,
       topicsRows: 48 * 24 * topicsV1,
       newsRows: 48 * 24 * newsV1,
     },
     {
-      name: `\`${commits[1]?.short || "dd72f60"}\` (1차 최적화: 10분 캐시)`,
-      ttl: "10분 (600s)",
-      execsPerHr: 16.6, // observed 341 / 20.5h
+      name: `${commits[1]?.short || "dd72f60"} (opt1: 10분캐시)`,
+      ttl: "10m (600s)",
+      execsPerHr: 16.6,
       topicsRows: 16.6 * 24 * topicsV2,
       newsRows: 16.3 * 24 * newsV2,
     },
     {
-      name: `\`${commits[2]?.short || "fc07821"}\` (2차 최적화: 30분 캐시 + 쿼리개선)`,
-      ttl: "30분 (1800s)",
-      execsPerHr: 6.0, // 2 runs/hr * ~3 PoPs
+      name: `${commits[2]?.short || "fc07821"} (opt2: 30분캐시)`,
+      ttl: "30m (1800s)",
+      execsPerHr: 6.0,
       topicsRows: 6.0 * 24 * topicsV3,
       newsRows: 6.0 * 24 * newsV2,
     },
   ];
 
+  console.log(`\n------------------------------------------------------------------------------------------------------------`);
+  console.log(` 24시간 환산 D1 Free Tier (5,000,000 rows/day) 소진율 시뮬레이션 (3 Edge PoPs 기준)`);
+  console.log(`------------------------------------------------------------------------------------------------------------`);
+  console.log(
+    `${pad("Commit Stage", 26)} | ${pad("Cache TTL", 11, "right")} | ${pad("Execs/hr", 9, "right")} | ${pad("TOPICS (24h)", 13, "right")} | ${pad("NEWS (24h)", 11, "right")} | ${pad("Total (24h)", 12, "right")} | ${pad("Free Tier %", 11, "right")}`
+  );
+  console.log("-".repeat(108));
+
   for (const p of projections) {
     const total24h = p.topicsRows + p.newsRows;
     const pctFreeTier = (total24h / D1_FREE_TIER_DAILY_READS) * 100;
-    md += `| ${p.name} | ${p.ttl} | ${p.execsPerHr.toFixed(1)} /hr | ${fmtNum(p.topicsRows)} | ${fmtNum(p.newsRows)} | **${fmtNum(total24h)}** | **${pctFreeTier.toFixed(1)}%** |\n`;
+    console.log(
+      `${pad(p.name, 26)} | ${pad(p.ttl, 11, "right")} | ${pad(p.execsPerHr.toFixed(1) + "/hr", 9, "right")} | ${pad(fmtNum(p.topicsRows), 13, "right")} | ${pad(fmtNum(p.newsRows), 11, "right")} | ${pad(fmtNum(total24h), 12, "right")} | ${pad(pctFreeTier.toFixed(1) + "%", 11, "right")}`
+    );
   }
-
-  fs.writeFileSync(mdPath, md, "utf8");
-  console.log(`\n==============================================================================================`);
-  console.log(` ✅ 마크다운 리포트 저장 완료: ${mdPath}`);
-  console.log(` 💡 언제든 'npm run report:d1' 을 실행하면 최신 누적 시간 평균으로 리포트가 갱신됩니다.`);
   console.log(`==============================================================================================\n`);
 }
 

@@ -1578,22 +1578,39 @@ function formatHumanMilestoneTime(rawTime: string | undefined): string {
   return `${datePart} ${period} ${hour12}:${minStr}`;
 }
 
-export function renderTopicTimeline(milestonesJson: string | null | undefined): string {
-  if (!milestonesJson) return "";
+export function renderTopicTimeline(
+  milestonesJson: string | null | undefined,
+  relatedTopics: Array<{
+    id: number;
+    title: string;
+    keywords: string | null;
+    milestones: string | null;
+    created_at: string;
+    updated_at: string;
+    article_count: number;
+    shared_news_count: number;
+    pivot_news_id: number | null;
+    shared_keywords?: string[];
+    relation_type: "prior" | "next" | "related";
+    is_from?: boolean;
+  }> = [],
+  currentTopicId: number | null = null
+): string {
   let items: Array<{ time?: string; text?: string; article_count?: number; news_id?: number }> = [];
-  try {
-    const parsed = JSON.parse(milestonesJson);
-    if (Array.isArray(parsed)) {
-      items = parsed;
-    } else if (parsed && Array.isArray(parsed.items)) {
-      items = parsed.items;
-    }
-  } catch {
-    return "";
+  if (milestonesJson) {
+    try {
+      const parsed = JSON.parse(milestonesJson);
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (parsed && Array.isArray(parsed.items)) {
+        items = parsed.items;
+      }
+    } catch {}
   }
 
   const validItems = items.filter((m) => m && typeof m.text === "string" && m.text.trim().length > 0);
-  if (validItems.length === 0) return "";
+  const hasRelated = Array.isArray(relatedTopics) && relatedTopics.length > 0;
+  if (validItems.length === 0 && !hasRelated) return "";
 
   const rowsHtml = validItems
     .map((m, idx) => {
@@ -1625,14 +1642,114 @@ export function renderTopicTimeline(milestonesJson: string | null | undefined): 
     })
     .join("");
 
+  const renderTopicNodeCard = (r: (typeof relatedTopics)[number]) => {
+    const mCount = getMilestoneCount(r.milestones);
+    const countBadge =
+      mCount > 0 ? `${mCount}단계 전개 · 기사 ${r.article_count}개` : `기사 ${r.article_count}개`;
+    const href = currentTopicId ? `/topic/${r.id}?from=${currentTopicId}` : `/topic/${r.id}`;
+
+    const badges: string[] = [];
+    if (r.is_from) {
+      badges.push(
+        `<span style="font-size: 11px; font-weight: 800; color: #fff; background: var(--accent); padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">↩ 방금 본 이슈</span>`
+      );
+    }
+
+    const kwText =
+      r.shared_keywords && r.shared_keywords.length > 0
+        ? `#${r.shared_keywords.join(" #")}`
+        : r.keywords
+        ? `#${r.keywords
+            .split(",")
+            .slice(0, 2)
+            .map((k) => k.trim())
+            .filter(Boolean)
+            .join(" #")}`
+        : "";
+
+    const borderStyle = r.is_from
+      ? "1.5px solid var(--accent)"
+      : "1px solid rgba(87, 53, 43, 0.2)";
+    const bgStyle = r.is_from ? "rgba(182, 73, 38, 0.07)" : "rgba(255, 255, 255, 0.5)";
+
+    return `
+      <a href="${href}" style="display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; background: ${bgStyle}; border: ${borderStyle}; border-radius: 6px; text-decoration: none; color: var(--text); transition: border-color 0.15s, background 0.15s;" onmouseover="this.style.borderColor='var(--accent)';this.style.background='rgba(182,73,38,0.08)'" onmouseout="this.style.borderColor='${r.is_from ? "var(--accent)" : "rgba(87,53,43,0.2)"}';this.style.background='${bgStyle}'">
+        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px;">
+          ${badges.join("")}
+          <span style="font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.35;">${escapeHtml(r.title)}</span>
+        </div>
+        <div style="font-size: 12px; color: var(--secondary);">
+          <span>[${countBadge}] ${kwText ? `· <span style="opacity: 0.85;">${escapeHtml(kwText)}</span>` : ""}</span>
+        </div>
+      </a>`;
+  };
+
+  let explorerHtml = "";
+  if (hasRelated) {
+    const priorTopics = relatedTopics
+      .filter((r) => r.relation_type === "prior")
+      .sort((a, b) => (b.is_from ? 1 : 0) - (a.is_from ? 1 : 0));
+
+    const rightColumnTopics = relatedTopics
+      .filter((r) => r.relation_type === "next" || r.relation_type === "related")
+      .sort((a, b) => {
+        if ((b.is_from ? 1 : 0) !== (a.is_from ? 1 : 0)) {
+          return (b.is_from ? 1 : 0) - (a.is_from ? 1 : 0);
+        }
+        if ((b.relation_type === "next" ? 1 : 0) !== (a.relation_type === "next" ? 1 : 0)) {
+          return (b.relation_type === "next" ? 1 : 0) - (a.relation_type === "next" ? 1 : 0);
+        }
+        return b.shared_news_count - a.shared_news_count;
+      });
+
+    const leftCardsHtml =
+      priorTopics.length > 0
+        ? priorTopics.map(renderTopicNodeCard).join("")
+        : `<div style="padding: 16px 12px; text-align: center; font-size: 12px; color: var(--secondary); background: rgba(87, 53, 43, 0.03); border: 1px dashed rgba(87, 53, 43, 0.18); border-radius: 6px;">이 토픽보다 앞서 기록된 배경 이슈가 없습니다.</div>`;
+
+    const rightCardsHtml =
+      rightColumnTopics.length > 0
+        ? rightColumnTopics.map(renderTopicNodeCard).join("")
+        : `<div style="padding: 16px 12px; text-align: center; font-size: 12px; color: var(--secondary); background: rgba(87, 53, 43, 0.03); border: 1px dashed rgba(87, 53, 43, 0.18); border-radius: 6px;">연결된 후속·연관 이슈가 아직 없습니다.</div>`;
+
+    explorerHtml = `
+      <div style="${validItems.length > 0 ? "margin-top: 18px;" : ""}">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start;">
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 800; color: var(--border); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1.5px solid rgba(87, 53, 43, 0.2);">
+              <span>← 이전·배경 이슈</span>
+              <span style="font-size: 12px; color: var(--secondary); font-weight: 600;">${priorTopics.length}개</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              ${leftCardsHtml}
+            </div>
+          </div>
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 800; color: var(--border); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1.5px solid rgba(182, 73, 38, 0.35);">
+              <span>연관·후속 이슈 →</span>
+              <span style="font-size: 12px; color: var(--secondary); font-weight: 600;">${rightColumnTopics.length}개</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              ${rightCardsHtml}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   return `
-    <div style="max-width: 800px; margin: 0 auto 24px auto; padding: 16px 20px; background: rgba(87, 53, 43, 0.05); border: 1px solid rgba(87, 53, 43, 0.22); border-left: 4px solid var(--accent); border-radius: 8px; box-sizing: border-box;">
-      <div style="display: flex; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed rgba(87, 53, 43, 0.2); padding-bottom: 8px;">
+    <div style="max-width: 800px; margin: 0 auto 24px auto; padding: 16px 20px; background: rgba(87, 53, 43, 0.05); border: 1px solid rgba(87, 53, 43, 0.22); border-radius: 8px; box-sizing: border-box;">
+      ${
+        validItems.length > 0
+          ? `<div style="display: flex; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed rgba(87, 53, 43, 0.2); padding-bottom: 8px;">
         <span style="font-size: 14px; font-weight: 800; color: var(--border); letter-spacing: -0.2px;">이슈 전개 타임라인</span>
       </div>
       <ul style="list-style: none; padding: 0; margin: 0;">
         ${rowsHtml}
-      </ul>
+      </ul>`
+          : ""
+      }
+      ${explorerHtml}
     </div>
   `;
 }

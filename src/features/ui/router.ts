@@ -29,6 +29,21 @@ export interface TopicRow {
   trending_score?: number;
 }
 
+export interface RelatedTopicNode {
+  id: number;
+  title: string;
+  keywords: string | null;
+  milestones: string | null;
+  created_at: string;
+  updated_at: string;
+  article_count: number;
+  shared_news_count: number;
+  pivot_news_id: number | null;
+  shared_keywords?: string[];
+  relation_type: "prior" | "next" | "related";
+  is_from?: boolean;
+}
+
 // Helper: 404 Page Template
 export function renderNotFoundPage(user: { username: string; has_feedback?: number } | null = null): string {
   const errorHtml = `
@@ -86,7 +101,8 @@ export function renderPage(
   topicId: number | null = null,
   updatedAt: string | null = null,
   topicKeywords: string | null = null,
-  topicMilestones: string | null = null
+  topicMilestones: string | null = null,
+  relatedTopics: RelatedTopicNode[] = []
 ): string {
   page = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   let content = "";
@@ -96,8 +112,8 @@ export function renderPage(
     const updateInfo = timeStr ? `<span style="font-size: 14px; color: var(--secondary); font-weight: normal; margin-left: 10px;">마지막 업데이트: ${timeStr}</span>` : '';
 
     content += `<h2 style="padding: 20px 0; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}${updateInfo}</h2>`;
-    if (page === 1 && topicMilestones) {
-      content += renderTopicTimeline(topicMilestones);
+    if (page === 1 && (topicMilestones || (relatedTopics && relatedTopics.length > 0))) {
+      content += renderTopicTimeline(topicMilestones, relatedTopics, topicId);
     }
     content += renderWideNewsList(news);
 
@@ -389,7 +405,7 @@ export async function fetchHotTopicsCached(
   env: Env,
   ctx?: ExecutionContext
 ): Promise<TopicRow[]> {
-  const topicsCacheKey = `https://cache.hy3n4.news/d1/hot-topics/v3`;
+  const topicsCacheKey = `https://cache.hy3n4.news/d1/hot-topics/v4`;
 
   return withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     const { results } = await env.DB.prepare(`
@@ -408,10 +424,43 @@ export async function fetchHotTopicsCached(
         GROUP BY t.updated_at, t.id
         HAVING article_count > 1
         ORDER BY trending_score DESC
-        LIMIT 10;
+        LIMIT 25;
       `).all<TopicRow>();
 
-    return results ?? [];
+    const candidates = results ?? [];
+    const selected: TopicRow[] = [];
+    const selectedKeywordSets: Set<string>[] = [];
+
+    for (const c of candidates) {
+      if (selected.length >= 10) break;
+      const kwSet = new Set(
+        (c.keywords || "")
+          .split(",")
+          .map((k) => k.trim().replace(/\s+/g, ""))
+          .filter((k) => k.length >= 2)
+      );
+
+      let isOverlappingTwin = false;
+      if (kwSet.size >= 2) {
+        for (const existingSet of selectedKeywordSets) {
+          let shared = 0;
+          for (const k of kwSet) {
+            if (existingSet.has(k)) shared++;
+          }
+          if (shared >= 2) {
+            isOverlappingTwin = true;
+            break;
+          }
+        }
+      }
+
+      if (!isOverlappingTwin) {
+        selected.push(c);
+        selectedKeywordSets.push(kwSet);
+      }
+    }
+
+    return selected;
   });
 }
 
@@ -659,19 +708,22 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
   const url = new URL(request.url);
   const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
+  const rawFrom = parseInt(url.searchParams.get("from") || "0", 10);
+  const fromTopicId = Number.isFinite(rawFrom) && rawFrom > 0 && rawFrom !== topicId ? rawFrom : null;
   const user = await getSessionUser(request, env);
 
-  const topicCacheKey = `https://cache.hy3n4.news/d1/topic/v2/${topicId}?page=${page}`;
+  const topicCacheKey = `https://cache.hy3n4.news/d1/topic/v6/${topicId}?page=${page}&from=${fromTopicId || 0}`;
   const topicData = await withEdgeCache<{
-    topicRow: { title: string; updated_at: string; keywords: string; milestones: string | null } | null;
+    topicRow: { id: number; title: string; created_at: string; updated_at: string; keywords: string; milestones: string | null } | null;
     news: NewsRow[];
+    relatedTopics: RelatedTopicNode[];
   }>(topicCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     const topicRow = await env.DB.prepare(
-      "SELECT title, updated_at, keywords, milestones FROM topics WHERE id = ?"
-    ).bind(topicId).first<{ title: string; updated_at: string; keywords: string; milestones: string | null }>();
+      "SELECT id, title, created_at, updated_at, keywords, milestones FROM topics WHERE id = ?"
+    ).bind(topicId).first<{ id: number; title: string; created_at: string; updated_at: string; keywords: string; milestones: string | null }>();
 
     if (!topicRow) {
-      return { topicRow: null, news: [] };
+      return { topicRow: null, news: [], relatedTopics: [] };
     }
 
     const { results: news } = await env.DB.prepare(`
@@ -689,7 +741,146 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
         CROSS JOIN sources s ON n.source_id = s.id
     `).bind(topicId, (page - 1) * 50).all<NewsRow>();
 
-    return { topicRow, news: news ?? [] };
+    const relatedMap = new Map<number, RelatedTopicNode>();
+
+    if (page === 1) {
+      const curCreatedMs = new Date(topicRow.created_at.replace(" ", "T") + "Z").getTime();
+      const classifyRelation = (otherCreatedAt: string): "prior" | "next" | "related" => {
+        const edgeCreatedMs = new Date(otherCreatedAt.replace(" ", "T") + "Z").getTime();
+        const diffMinutes = (edgeCreatedMs - curCreatedMs) / (1000 * 60);
+        if (diffMinutes < -30) return "prior";
+        if (diffMinutes > 30) return "next";
+        return "related";
+      };
+
+      // 1. Direct Graph Edges via Shared Articles (news_topics intersection)
+      const { results: sharedEdges } = await env.DB.prepare(`
+        SELECT
+          t2.id,
+          t2.title,
+          t2.keywords,
+          t2.milestones,
+          t2.created_at,
+          t2.updated_at,
+          COUNT(DISTINCT nt_shared.news_id) as shared_news_count,
+          MAX(nt_shared.news_id) as pivot_news_id,
+          (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
+        FROM news_topics nt1
+        JOIN news_topics nt_shared ON nt1.news_id = nt_shared.news_id AND nt_shared.topic_id != nt1.topic_id
+        JOIN topics t2 ON t2.id = nt_shared.topic_id
+        WHERE nt1.topic_id = ?
+        GROUP BY t2.id
+        HAVING article_count >= 2
+        ORDER BY shared_news_count DESC, article_count DESC, t2.updated_at DESC
+        LIMIT 12
+      `).bind(topicId).all<{
+        id: number;
+        title: string;
+        keywords: string | null;
+        milestones: string | null;
+        created_at: string;
+        updated_at: string;
+        shared_news_count: number;
+        pivot_news_id: number | null;
+        article_count: number;
+      }>();
+
+      for (const edge of sharedEdges ?? []) {
+        if (edge.article_count <= 2 && edge.shared_news_count >= edge.article_count && (news?.length ?? 0) <= 2) {
+          continue;
+        }
+        relatedMap.set(edge.id, {
+          ...edge,
+          relation_type: classifyRelation(edge.created_at),
+          is_from: edge.id === fromTopicId,
+        });
+      }
+
+      // 2. Thematic / Keyword Graph Edges (recent topics sharing keywords)
+      const kwTokens = (topicRow.keywords || "")
+        .split(",")
+        .map((k) => k.trim())
+        .filter((k) => k.length >= 2)
+        .slice(0, 4);
+
+      if (kwTokens.length > 0) {
+        const likeClauses = kwTokens.map(() => "t2.keywords LIKE ?").join(" OR ");
+        const likeParams = kwTokens.map((k) => `%${k}%`);
+        const { results: kwEdges } = await env.DB.prepare(`
+          SELECT
+            t2.id,
+            t2.title,
+            t2.keywords,
+            t2.milestones,
+            t2.created_at,
+            t2.updated_at,
+            (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
+          FROM topics t2
+          WHERE t2.id != ?
+            AND t2.created_at >= datetime('now', '-10 days')
+            AND (${likeClauses})
+          ORDER BY t2.updated_at DESC
+          LIMIT 16
+        `).bind(topicId, ...likeParams).all<{
+          id: number;
+          title: string;
+          keywords: string | null;
+          milestones: string | null;
+          created_at: string;
+          updated_at: string;
+          article_count: number;
+        }>();
+
+        for (const ke of kwEdges ?? []) {
+          if (ke.article_count < 2 || relatedMap.has(ke.id)) continue;
+          const matchedKws = kwTokens.filter((k) => (ke.keywords || "").includes(k));
+          relatedMap.set(ke.id, {
+            ...ke,
+            shared_news_count: 0,
+            pivot_news_id: null,
+            shared_keywords: matchedKws,
+            relation_type: classifyRelation(ke.created_at),
+            is_from: ke.id === fromTopicId,
+          });
+        }
+      }
+
+      // 3. Ensure bidirectional return to `fromTopicId` if user navigated here via a topic link
+      if (fromTopicId && !relatedMap.has(fromTopicId)) {
+        const fromRow = await env.DB.prepare(`
+          SELECT
+            t2.id,
+            t2.title,
+            t2.keywords,
+            t2.milestones,
+            t2.created_at,
+            t2.updated_at,
+            (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
+          FROM topics t2
+          WHERE t2.id = ?
+        `).bind(fromTopicId).first<{
+          id: number;
+          title: string;
+          keywords: string | null;
+          milestones: string | null;
+          created_at: string;
+          updated_at: string;
+          article_count: number;
+        }>();
+
+        if (fromRow) {
+          relatedMap.set(fromRow.id, {
+            ...fromRow,
+            shared_news_count: 0,
+            pivot_news_id: null,
+            relation_type: classifyRelation(fromRow.created_at),
+            is_from: true,
+          });
+        }
+      }
+    }
+
+    return { topicRow, news: news ?? [], relatedTopics: Array.from(relatedMap.values()) };
   });
 
   if (!topicData.topicRow) {
@@ -707,7 +898,8 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     topicId,
     topicData.topicRow.updated_at,
     topicData.topicRow.keywords,
-    topicData.topicRow.milestones
+    topicData.topicRow.milestones,
+    topicData.relatedTopics
   );
   return new Response(html, {
     headers: {

@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS topics (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
   keywords TEXT,  -- LLM generated tags
+  milestones TEXT, -- JSON: incremental timeline milestones & evolution metadata
+  last_summarized_count INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   is_active INTEGER NOT NULL DEFAULT 1

@@ -1,7 +1,7 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { getRelativeTime } from "../../core/utils";
-import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults, renderPagination, SeoOptions } from "./templates";
+import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults, renderPagination, renderTopicTimeline, SeoOptions } from "./templates";
 
 export const uiRouter = new Router();
 
@@ -24,6 +24,7 @@ export interface TopicRow {
   title: string;
   article_count: number;
   keywords?: string;
+  milestones?: string | null;
   updated_at?: string;
   trending_score?: number;
 }
@@ -84,7 +85,8 @@ export function renderPage(
   page: number = 1,
   topicId: number | null = null,
   updatedAt: string | null = null,
-  topicKeywords: string | null = null
+  topicKeywords: string | null = null,
+  topicMilestones: string | null = null
 ): string {
   page = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   let content = "";
@@ -94,6 +96,9 @@ export function renderPage(
     const updateInfo = timeStr ? `<span style="font-size: 14px; color: var(--secondary); font-weight: normal; margin-left: 10px;">마지막 업데이트: ${timeStr}</span>` : '';
 
     content += `<h2 style="padding: 20px 0; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">${topicName}${updateInfo}</h2>`;
+    if (page === 1 && topicMilestones) {
+      content += renderTopicTimeline(topicMilestones);
+    }
     content += renderWideNewsList(news);
 
     let seo: SeoOptions = {
@@ -384,7 +389,7 @@ export async function fetchHotTopicsCached(
   env: Env,
   ctx?: ExecutionContext
 ): Promise<TopicRow[]> {
-  const topicsCacheKey = `https://cache.hy3n4.news/d1/hot-topics`;
+  const topicsCacheKey = `https://cache.hy3n4.news/d1/hot-topics/v3`;
 
   return withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     const { results } = await env.DB.prepare(`
@@ -393,6 +398,7 @@ export async function fetchHotTopicsCached(
             t.id, 
             t.title, 
             t.keywords, 
+            t.milestones,
             COUNT(nt.news_id) as article_count,
             (COUNT(nt.news_id) * 1.0) / POW(((julianday('now') - julianday(t.updated_at)) * 24) + 2, 1.8) AS trending_score
         FROM topics t
@@ -655,14 +661,14 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const user = await getSessionUser(request, env);
 
-  const topicCacheKey = `https://cache.hy3n4.news/d1/topic/${topicId}?page=${page}`;
+  const topicCacheKey = `https://cache.hy3n4.news/d1/topic/v2/${topicId}?page=${page}`;
   const topicData = await withEdgeCache<{
-    topicRow: { title: string; updated_at: string; keywords: string } | null;
+    topicRow: { title: string; updated_at: string; keywords: string; milestones: string | null } | null;
     news: NewsRow[];
   }>(topicCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     const topicRow = await env.DB.prepare(
-      "SELECT title, updated_at, keywords FROM topics WHERE id = ?"
-    ).bind(topicId).first<{ title: string; updated_at: string; keywords: string }>();
+      "SELECT title, updated_at, keywords, milestones FROM topics WHERE id = ?"
+    ).bind(topicId).first<{ title: string; updated_at: string; keywords: string; milestones: string | null }>();
 
     if (!topicRow) {
       return { topicRow: null, news: [] };
@@ -700,7 +706,8 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     page,
     topicId,
     topicData.topicRow.updated_at,
-    topicData.topicRow.keywords
+    topicData.topicRow.keywords,
+    topicData.topicRow.milestones
   );
   return new Response(html, {
     headers: {

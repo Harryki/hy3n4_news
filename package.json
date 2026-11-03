@@ -6,7 +6,9 @@
     "dev": "wrangler dev --env-file .dev.vars --ip 0.0.0.0 --port 8787",
     "deploy": "wrangler deploy",
     "report:d1": "node scripts/d1-report.mjs",
-    "report:feedback": "node scripts/feedback-report.mjs"
+    "report:feedback": "node scripts/feedback-report.mjs",
+    "report:topics": "node scripts/topics-report.mjs",
+    "sim:topic": "node scripts/sim-topic.mjs"
   },
   "dependencies": {
     "fast-xml-parser": "^4.5.1"

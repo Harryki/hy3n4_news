@@ -1138,7 +1138,6 @@ export function renderHTML(
       const headerFbBtn = document.getElementById('header-feedback-btn');
       const sidebarFbBtn = document.getElementById('sidebar-feedback-btn');
       const footerFbBtn = document.getElementById('footer-feedback-btn');
-      const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const forceFbOpen = new URLSearchParams(window.location.search).get('fb') === '1';
 
       const hasCookie = (name) => document.cookie.split(';').some((c) => c.trim().startsWith(name + '='));
@@ -1161,7 +1160,6 @@ export function renderHTML(
       };
 
       const isFbSnoozed = () => {
-        if (isLocalDev) return false;
         try {
           const until = parseInt(localStorage.getItem('hy3n4_fb_snooze_until') || '0', 10);
           if (until > Date.now()) return true;
@@ -1177,7 +1175,7 @@ export function renderHTML(
       const closeFeedbackModal = (snooze) => {
         fbModal.classList.remove('open');
         document.body.style.overflow = '';
-        if (snooze && !isFbDone() && !isLocalDev) {
+        if (snooze && !isFbDone()) {
           const sevenDaysSec = 60 * 60 * 24 * 7;
           setCookie('hy3n4_fb_snooze', '1', sevenDaysSec);
           try {
@@ -1341,6 +1339,17 @@ export function renderNewsList(sourceName: string, news: any[]) {
   return html;
 }
 
+function getMilestoneCount(milestonesJson: string | null | undefined): number {
+  if (!milestonesJson) return 0;
+  try {
+    const parsed = JSON.parse(milestonesJson);
+    const items = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.items) ? parsed.items : [];
+    return items.filter((m: any) => m && typeof m.text === "string" && m.text.trim().length > 0).length;
+  } catch {
+    return 0;
+  }
+}
+
 export function renderTopics(topics: any[]) {
   if (!topics || topics.length === 0) return '';
 
@@ -1349,7 +1358,12 @@ export function renderTopics(topics: any[]) {
       <div class="topic-pills">`;
 
   topics.forEach((t) => {
-    const badge = `<span class="topic-pill-count">[기사 ${t.article_count}개]</span>`;
+    const milestoneCount = getMilestoneCount(t.milestones);
+    const badgeText =
+      milestoneCount > 0
+        ? `[${milestoneCount}단계 전개 · 기사 ${t.article_count}개]`
+        : `[기사 ${t.article_count}개]`;
+    const badge = `<span class="topic-pill-count">${badgeText}</span>`;
     html += `
           <a href="/topic/${t.id}" class="topic-pill">
             <div class="topic-pill-header">${t.title} ${badge}</div>
@@ -1499,5 +1513,127 @@ export function renderWideNewsList(news: any[]) {
 
   html += `</ul></div>`;
   return html;
+}
+
+function formatHumanMilestoneTime(rawTime: string | undefined): string {
+  if (!rawTime) return "";
+  const trimmed = rawTime.trim();
+
+  // Current time in KST (UTC+9)
+  const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+  const curYear = nowKst.getUTCFullYear();
+  const curMonth = nowKst.getUTCMonth() + 1;
+  const curDay = nowKst.getUTCDate();
+
+  let year = curYear;
+  let month = 0;
+  let day = 0;
+  let hour = 0;
+  let minute = 0;
+
+  // Case 1: "MM/DD HH:MM" (already in KST)
+  const shortMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})$/);
+  if (shortMatch) {
+    month = parseInt(shortMatch[1], 10);
+    day = parseInt(shortMatch[2], 10);
+    hour = parseInt(shortMatch[3], 10);
+    minute = parseInt(shortMatch[4], 10);
+    if (month > curMonth + 1) {
+      year = curYear - 1;
+    }
+  } else {
+    // Case 2: ISO or SQLite UTC string
+    const normalized = trimmed.endsWith("Z") ? trimmed : trimmed.replace(" ", "T") + "Z";
+    const parsedDate = new Date(normalized);
+    if (isNaN(parsedDate.getTime())) {
+      return trimmed;
+    }
+    const kstDate = new Date(parsedDate.getTime() + 9 * 3600 * 1000);
+    year = kstDate.getUTCFullYear();
+    month = kstDate.getUTCMonth() + 1;
+    day = kstDate.getUTCDate();
+    hour = kstDate.getUTCHours();
+    minute = kstDate.getUTCMinutes();
+  }
+
+  const todayDays = Math.floor(Date.UTC(curYear, curMonth - 1, curDay) / 86400000);
+  const targetDays = Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+  const diffDays = todayDays - targetDays;
+
+  let datePart = "";
+  if (diffDays <= 0) {
+    datePart = "오늘";
+  } else if (diffDays === 1) {
+    datePart = "어제";
+  } else if (diffDays === 2) {
+    datePart = "그제";
+  } else {
+    datePart = `${month}월 ${day}일`;
+  }
+
+  const period = hour < 12 ? "오전" : "오후";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  const minStr = String(minute).padStart(2, "0");
+
+  return `${datePart} ${period} ${hour12}:${minStr}`;
+}
+
+export function renderTopicTimeline(milestonesJson: string | null | undefined): string {
+  if (!milestonesJson) return "";
+  let items: Array<{ time?: string; text?: string; article_count?: number; news_id?: number }> = [];
+  try {
+    const parsed = JSON.parse(milestonesJson);
+    if (Array.isArray(parsed)) {
+      items = parsed;
+    } else if (parsed && Array.isArray(parsed.items)) {
+      items = parsed.items;
+    }
+  } catch {
+    return "";
+  }
+
+  const validItems = items.filter((m) => m && typeof m.text === "string" && m.text.trim().length > 0);
+  if (validItems.length === 0) return "";
+
+  const rowsHtml = validItems
+    .map((m, idx) => {
+      const isLast = idx === validItems.length - 1;
+      const dotColor = isLast ? "var(--accent)" : "var(--secondary)";
+      const dotSize = isLast ? "10px" : "8px";
+      const fontWeight = isLast ? "700" : "500";
+      const humanTime = formatHumanMilestoneTime(m.time);
+      const timeBadge = humanTime
+        ? `<span style="display: inline-block; font-size: 12px; color: var(--secondary); background: rgba(87, 53, 43, 0.1); padding: 2px 8px; border-radius: 4px; margin-right: 8px; flex-shrink: 0; font-weight: 600;">${escapeHtml(humanTime)}</span>`
+        : "";
+      const linkHtml = m.news_id
+        ? ` <a href="/go/${m.news_id}" target="_blank" rel="nofollow" style="font-size: 11px; color: var(--accent); text-decoration: none; margin-left: 6px; white-space: nowrap;">[관련기사 ↗]</a>`
+        : "";
+
+      return `
+        <li style="position: relative; padding-left: 22px; padding-bottom: ${isLast ? "0" : "12px"}; line-height: 1.5;">
+          ${
+            !isLast
+              ? `<span style="position: absolute; left: 4px; top: 14px; bottom: -4px; width: 1.5px; background: rgba(87, 53, 43, 0.22);"></span>`
+              : ""
+          }
+          <span style="position: absolute; left: ${isLast ? "0px" : "1px"}; top: 6px; width: ${dotSize}; height: ${dotSize}; border-radius: 50%; background: ${dotColor};"></span>
+          <div style="display: flex; align-items: baseline; flex-wrap: wrap; font-size: 14px; color: var(--text); font-weight: ${fontWeight};">
+            ${timeBadge}
+            <span>${escapeHtml(m.text || "")}${linkHtml}</span>
+          </div>
+        </li>`;
+    })
+    .join("");
+
+  return `
+    <div style="max-width: 800px; margin: 0 auto 24px auto; padding: 16px 20px; background: rgba(87, 53, 43, 0.05); border: 1px solid rgba(87, 53, 43, 0.22); border-left: 4px solid var(--accent); border-radius: 8px; box-sizing: border-box;">
+      <div style="display: flex; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed rgba(87, 53, 43, 0.2); padding-bottom: 8px;">
+        <span style="font-size: 14px; font-weight: 800; color: var(--border); letter-spacing: -0.2px;">이슈 전개 타임라인</span>
+      </div>
+      <ul style="list-style: none; padding: 0; margin: 0;">
+        ${rowsHtml}
+      </ul>
+    </div>
+  `;
 }
 

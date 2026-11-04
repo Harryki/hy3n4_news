@@ -303,11 +303,11 @@ async function fetchTop10HotTopics(token, accountId) {
        ROUND(MIN(nt.similarity_score), 3) as min_sim,
        ((julianday('now') - julianday(t.updated_at)) * 24.0) as hours_since_update
      FROM topics t
-     JOIN news_topics nt ON t.id = nt.topic_id
-     JOIN news n ON nt.news_id = n.id
+     CROSS JOIN news_topics nt ON t.id = nt.topic_id
+     CROSS JOIN news n ON nt.news_id = n.id
      WHERE t.updated_at >= datetime('now', '-24 hours')
        AND t.created_at >= datetime('now', '-10 days')
-     GROUP BY t.id
+     GROUP BY t.updated_at, t.id
      HAVING article_count > 1`
   );
 
@@ -388,9 +388,9 @@ async function main() {
        t.keywords,
        COUNT(nt.news_id) as article_count
      FROM topics t
-     JOIN news_topics nt ON t.id = nt.topic_id
+     CROSS JOIN news_topics nt ON t.id = nt.topic_id
      WHERE t.updated_at >= datetime('now', '-48 hours')
-     GROUP BY t.id
+     GROUP BY t.updated_at, t.id
      HAVING article_count >= 2
      ORDER BY article_count DESC
      LIMIT 60`

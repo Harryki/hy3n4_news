@@ -355,10 +355,11 @@ async function main() {
          COUNT(DISTINCT n.source_id) as source_count,
          ROUND((julianday(MAX(COALESCE(n.published_at, n.created_at))) - julianday(MIN(COALESCE(n.published_at, n.created_at)))) * 24, 1) as span_hours
        FROM topics t
-       JOIN news_topics nt ON t.id = nt.topic_id
-       JOIN news n ON nt.news_id = n.id
-       WHERE t.created_at >= datetime('now', '-7 days')
-       GROUP BY t.id
+       CROSS JOIN news_topics nt ON t.id = nt.topic_id
+       CROSS JOIN news n ON nt.news_id = n.id
+       WHERE t.updated_at >= datetime('now', '-7 days')
+         AND t.created_at >= datetime('now', '-7 days')
+       GROUP BY t.updated_at, t.id
        HAVING article_count BETWEEN 8 AND 22 AND source_count >= 3
        ORDER BY span_hours DESC, article_count DESC
        LIMIT 5`

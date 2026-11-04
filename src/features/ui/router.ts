@@ -754,7 +754,22 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
       };
 
       // 1. Direct Graph Edges via Shared Articles (news_topics intersection)
+      // Aggregate shared-article pairs first (index-only on news_topics), so the per-topic
+      // article_count subquery runs once per candidate instead of in SELECT + HAVING + ORDER BY.
+      // COUNT(*) == COUNT(DISTINCT news_id) here because (news_id, topic_id) is the PK.
       const { results: sharedEdges } = await env.DB.prepare(`
+        WITH shared_ranked AS MATERIALIZED (
+          SELECT
+            nt_shared.topic_id,
+            COUNT(*) as shared_news_count,
+            MAX(nt_shared.news_id) as pivot_news_id,
+            (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = nt_shared.topic_id) as article_count
+          FROM news_topics nt1
+          CROSS JOIN news_topics nt_shared
+            ON nt1.news_id = nt_shared.news_id AND nt_shared.topic_id != nt1.topic_id
+          WHERE nt1.topic_id = ?
+          GROUP BY nt_shared.topic_id
+        )
         SELECT
           t2.id,
           t2.title,
@@ -762,16 +777,13 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
           t2.milestones,
           t2.created_at,
           t2.updated_at,
-          COUNT(DISTINCT nt_shared.news_id) as shared_news_count,
-          MAX(nt_shared.news_id) as pivot_news_id,
-          (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
-        FROM news_topics nt1
-        JOIN news_topics nt_shared ON nt1.news_id = nt_shared.news_id AND nt_shared.topic_id != nt1.topic_id
-        JOIN topics t2 ON t2.id = nt_shared.topic_id
-        WHERE nt1.topic_id = ?
-        GROUP BY t2.id
-        HAVING article_count >= 2
-        ORDER BY shared_news_count DESC, article_count DESC, t2.updated_at DESC
+          sr.shared_news_count,
+          sr.pivot_news_id,
+          sr.article_count
+        FROM shared_ranked sr
+        CROSS JOIN topics t2 ON t2.id = sr.topic_id
+        WHERE sr.article_count >= 2
+        ORDER BY sr.shared_news_count DESC, sr.article_count DESC, t2.updated_at DESC
         LIMIT 12
       `).bind(topicId).all<{
         id: number;
@@ -816,8 +828,12 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
             t2.updated_at,
             (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
           FROM topics t2
-          WHERE t2.id != ?
+          -- updated_at >= created_at always holds, so this bound is implied by the created_at
+          -- filter but lets SQLite range-search idx_topics_recent_full instead of scanning
+          -- the whole topics table (was ~35k rows read per call).
+          WHERE t2.updated_at >= datetime('now', '-10 days')
             AND t2.created_at >= datetime('now', '-10 days')
+            AND t2.id != ?
             AND (${likeClauses})
           ORDER BY t2.updated_at DESC
           LIMIT 16

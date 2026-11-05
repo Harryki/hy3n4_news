@@ -2,7 +2,7 @@ import { Env } from "./auth";
 import { app } from "./app";
 import { performRSSFetch } from "./features/rss/fetcher";
 import { processNewsQueue } from "./features/ai/queue";
-import { publishDailyBlogPost } from "./features/blog/service";
+import { publishDailyBlogPost, BlogSlot } from "./features/blog/service";
 
 export default {
   async fetch(
@@ -18,14 +18,26 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    // 0 0 * * * = UTC midnight (16:00 PST / 09:00 KST) -> Generate & publish daily blog post
-    if (event.cron === "0 0 * * *") {
+    // 3 times a day for daily editions (Morning 09:00, Afternoon 14:00, Evening 20:00 KST):
+    // 0 0 * * * = 00:00 UTC (09:00 KST) -> Morning Briefing (아침 브리핑)
+    // 0 5 * * * = 05:00 UTC (14:00 KST) -> Afternoon Briefing (오후 브리핑)
+    // 0 11 * * * = 11:00 UTC (20:00 KST) -> Evening Briefing (저녁 브리핑)
+    const isBlogCron =
+      event.cron === "0 0 * * *" ||
+      event.cron === "0 5 * * *" ||
+      event.cron === "0 11 * * *";
+
+    if (isBlogCron) {
+      let slot: BlogSlot = "morning";
+      if (event.cron === "0 5 * * *") slot = "afternoon";
+      else if (event.cron === "0 11 * * *") slot = "evening";
+
       ctx.waitUntil(
         (async () => {
           try {
-            await publishDailyBlogPost(env);
+            await publishDailyBlogPost(env, undefined, slot);
           } catch (e: any) {
-            console.error("[CRON] Daily blog generation failed:", e.message);
+            console.error(`[CRON] ${slot} blog generation failed:`, e.message);
           }
           await performRSSFetch(env);
         })()

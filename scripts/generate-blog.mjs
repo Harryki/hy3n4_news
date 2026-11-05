@@ -129,6 +129,14 @@ async function runAI(token, accountId, model, payload) {
   return json.result;
 }
 
+function getTodayKstDate() {
+  const kstTime = new Date(Date.now() + 9 * 3600 * 1000);
+  const year = kstTime.getUTCFullYear();
+  const month = String(kstTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(kstTime.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getYesterdayKstDate() {
   const kstTime = new Date(Date.now() + 9 * 3600 * 1000 - 24 * 3600 * 1000);
   const year = kstTime.getUTCFullYear();
@@ -137,12 +145,59 @@ function getYesterdayKstDate() {
   return `${year}-${month}-${day}`;
 }
 
-function getKstDayUtcBounds(targetDateKst) {
+function getCurrentKstSlot() {
+  const kstHour = (new Date().getUTCHours() + 9) % 24;
+  if (kstHour >= 6 && kstHour < 12) return "morning";
+  if (kstHour >= 12 && kstHour < 17) return "afternoon";
+  return "evening";
+}
+
+function getSlotUtcBounds(targetDateKst, slot = "morning") {
   const [y, m, d] = targetDateKst.split("-").map(Number);
-  const startEpoch = Date.UTC(y, m - 1, d, 0, 0, 0) - 9 * 3600 * 1000;
-  const endEpoch = Date.UTC(y, m - 1, d, 23, 59, 59, 999) - 9 * 3600 * 1000;
+  let endHourKst = 9;
+  let lookbackHours = 20;
+
+  if (slot === "afternoon") {
+    endHourKst = 14;
+    lookbackHours = 18;
+  } else if (slot === "evening") {
+    endHourKst = 20;
+    lookbackHours = 18;
+  }
+
+  const endEpoch = Date.UTC(y, m - 1, d, endHourKst, 0, 0) - 9 * 3600 * 1000;
+  const startEpoch = endEpoch - lookbackHours * 3600 * 1000;
+
   const toSqliteStr = (epoch) => new Date(epoch).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
   return { startUtc: toSqliteStr(startEpoch), endUtc: toSqliteStr(endEpoch) };
+}
+
+async function getRecentCoveredTopicIds(token, accountId, lookbackHours = 36) {
+  const cutoff = new Date(Date.now() - lookbackHours * 3600 * 1000)
+    .toISOString()
+    .replace("T", " ")
+    .replace(/\.\d+Z$/, "");
+
+  const rows = await queryD1(
+    token,
+    accountId,
+    `SELECT topics_data FROM blog_posts WHERE created_at >= ? OR published_at >= ? ORDER BY id DESC LIMIT 10`,
+    [cutoff, cutoff]
+  );
+
+  const topicIds = new Set();
+  for (const row of rows || []) {
+    if (!row.topics_data) continue;
+    try {
+      const items = JSON.parse(row.topics_data);
+      if (Array.isArray(items)) {
+        for (const it of items) {
+          if (it?.id && typeof it.id === "number") topicIds.add(it.id);
+        }
+      }
+    } catch {}
+  }
+  return Array.from(topicIds);
 }
 
 async function ensureTable(token, accountId) {
@@ -171,14 +226,37 @@ async function ensureTable(token, accountId) {
 async function main() {
   const args = process.argv.slice(2);
   const dateArg = args.find((a) => a.startsWith("--date="))?.split("=")[1];
+  const slotArg = args.find((a) => a.startsWith("--slot="))?.split("=")[1];
   const force = args.includes("--force");
 
-  const targetDate = dateArg || getYesterdayKstDate();
-  const slug = `${targetDate}-daily-briefing`;
+  let targetDate = dateArg || getTodayKstDate();
+  let slot = slotArg || getCurrentKstSlot();
+
+  if (targetDate.includes("-morning")) {
+    targetDate = targetDate.replace("-morning", "");
+    slot = "morning";
+  } else if (targetDate.includes("-afternoon")) {
+    targetDate = targetDate.replace("-afternoon", "");
+    slot = "afternoon";
+  } else if (targetDate.includes("-evening")) {
+    targetDate = targetDate.replace("-evening", "");
+    slot = "evening";
+  }
+
+  const targetDateKey = `${targetDate}-${slot}`;
+  const slug = `${targetDate}-${slot}-briefing`;
+
+  const slotLabels = {
+    morning: "아침 브리핑 (09:00 KST)",
+    afternoon: "오후 브리핑 (14:00 KST)",
+    evening: "저녁 브리핑 (20:00 KST)",
+  };
 
   console.log(`\n================================================================================`);
-  console.log(`✍️  [하이에나뉴스] 일일 뉴스 블로그 포스트 생성기 (${BLOG_MODEL})`);
+  console.log(`✍️  [하이에나뉴스] 일일 3회 뉴스 블로그 포스트 생성기 (${BLOG_MODEL})`);
   console.log(`   - 대상 일자 (KST): ${targetDate}`);
+  console.log(`   - 발행 슬롯     : ${slot} (${slotLabels[slot] || slot})`);
+  console.log(`   - DB 타겟 키   : ${targetDateKey}`);
   console.log(`   - 슬러그 (Slug) : ${slug}`);
   console.log(`================================================================================\n`);
 
@@ -190,20 +268,33 @@ async function main() {
     token,
     accountId,
     `SELECT id, title, published_at FROM blog_posts WHERE target_date = ? OR slug = ?`,
-    [targetDate, slug]
+    [targetDateKey, slug]
   );
 
   if (existing.length > 0 && !force) {
-    console.log(`ℹ️  해당 일자(${targetDate})의 블로그 글이 이미 존재합니다 (#${existing[0].id}: "${existing[0].title}").`);
+    console.log(`ℹ️  해당 슬롯(${targetDateKey})의 블로그 글이 이미 존재합니다 (#${existing[0].id}: "${existing[0].title}").`);
     console.log(`   덮어쓰려면 --force 옵션을 붙여 다시 실행하세요:`);
-    console.log(`   node scripts/generate-blog.mjs --date=${targetDate} --force\n`);
+    console.log(`   node scripts/generate-blog.mjs --date=${targetDate} --slot=${slot} --force\n`);
     return;
   }
 
-  const { startUtc, endUtc } = getKstDayUtcBounds(targetDate);
-  console.log(`🔍 [1/3] ${targetDate} KST 기사 기준 상위 3대 토픽 조회 중... (UTC ${startUtc} ~ ${endUtc})`);
+  // Exclude topics covered in the last 36 hours to prevent duplication
+  const excludedTopicIds = await getRecentCoveredTopicIds(token, accountId, 36);
+  if (excludedTopicIds.length > 0) {
+    console.log(`🚫 최근 36시간 내 다른 회차에서 다룬 토픽 제외 (${excludedTopicIds.length}개): [${excludedTopicIds.join(", ")}]`);
+  }
 
-  const topicRows = await queryD1(
+  const { startUtc, endUtc } = getSlotUtcBounds(targetDate, slot);
+  console.log(`🔍 [1/3] ${targetDate} ${slot} 기사 기준 상위 3대 토픽 조회 중... (UTC ${startUtc} ~ ${endUtc})`);
+
+  let excludeSql = "";
+  let bindParams = [startUtc, startUtc, endUtc, startUtc, endUtc];
+  if (excludedTopicIds.length > 0) {
+    excludeSql = ` AND t.id NOT IN (${excludedTopicIds.map(() => "?").join(", ")})`;
+    bindParams.push(...excludedTopicIds);
+  }
+
+  let topicRows = await queryD1(
     token,
     accountId,
     `SELECT
@@ -218,6 +309,16 @@ async function main() {
     CROSS JOIN news n ON nt.news_id = n.id
     WHERE t.updated_at >= ?
       AND (n.published_at BETWEEN ? AND ? OR n.created_at BETWEEN ? AND ?)
+      ${excludeSql}
+    GROUP BY t.updated_at, t.id
+    HAVING article_count >= 2
+    ORDER BY
+      (CASE WHEN t.milestones IS NOT NULL AND length(t.milestones) > 20 THEN 1 ELSE 0 END) DESC,
+      article_count DESC,
+      source_count DESC
+    LIMIT 3;`,
+    bindParams
+  );
     GROUP BY t.updated_at, t.id
     HAVING article_count >= 2
     ORDER BY
@@ -255,10 +356,30 @@ async function main() {
     );
   }
 
-  console.log(`\n🤖 [2/3] Workers AI (${BLOG_MODEL})로 SEO 블로그 칼럼 작성 요청 중...`);
+  console.log(`\n🤖 [2/3] Workers AI (${BLOG_MODEL}, ${slot} slot)로 SEO 블로그 칼럼 작성 요청 중...`);
 
   const [y, m, d] = targetDate.split("-");
   const dateFormatted = `${y}년 ${parseInt(m, 10)}월 ${parseInt(d, 10)}일`;
+
+  const slotMeta = {
+    morning: {
+      ko: "아침",
+      timeDesc: "밤사이 및 출근 시간대",
+      editorialFocus: "밤사이 누적된 주요 이슈와 오늘 하루 주목해야 할 경제·사회 핵심 사안을 신속하고 정확하게 짚어주는 출근길 브리핑",
+    },
+    afternoon: {
+      ko: "오후",
+      timeDesc: "오전부터 정오 사이",
+      editorialFocus: "오전 중 속보로 터져 나온 이슈와 정오까지 이어진 각 언론사의 집중 분석 및 오후 시장 관전 포인트를 전달하는 점심 브리핑",
+    },
+    evening: {
+      ko: "저녁",
+      timeDesc: "오늘 하루 전체 및 오후 주요 흐름",
+      editorialFocus: "오늘 하루를 관통한 최대 이슈들을 총결산하고 사건의 전말과 향후 파급 효과를 깊이 있게 분석하는 퇴근길 브리핑",
+    },
+  };
+
+  const slotInfo = slotMeta[slot] || slotMeta.morning;
 
   const topicPrompts = topicRows.map((t, idx) => {
     let milestonesStr = "(실시간 집계 중)";
@@ -286,32 +407,33 @@ ${articleLines}`;
   }).join("\n\n");
 
   const systemPrompt = `You are a professional Korean news journalist, chief editor, and SEO specialist for '하이에나뉴스' (hy3n4.news).
-Your task is to write a comprehensive, highly informative, and engaging daily news recap blog post in Korean.
+Your task is to write a comprehensive, highly informative, and engaging ${slotInfo.ko} news recap blog post in Korean.
 Write with journalistic integrity, clear paragraph transitions, and high SEO readability.
 Respond ONLY with a valid JSON object matching the requested schema.`;
 
-  const userPrompt = `다음은 ${dateFormatted} 하루 동안 대한민국 주요 언론사들에서 가장 뜨겁게 다뤄진 상위 3대 뉴스 토픽 데이터입니다.
-이 데이터를 바탕으로 검색엔진 최적화(SEO)와 독자의 정보 가치를 극대화하는 깊이 있는 일일 브리핑 블로그 포스트를 작성하세요.
+  const userPrompt = `다음은 ${dateFormatted} ${slotInfo.ko} 기준 (${slotInfo.timeDesc}) 대한민국 주요 언론사들에서 가장 뜨겁게 다뤄진 상위 3대 뉴스 토픽 데이터입니다.
+편집 방향: ${slotInfo.editorialFocus}.
+이 데이터를 바탕으로 검색엔진 최적화(SEO)와 독자의 정보 가치를 극대화하는 깊이 있는 ${slotInfo.ko} 뉴스 브리핑 블로그 포스트를 작성하세요.
 
 [선정된 3대 토픽 데이터]
 ${topicPrompts}
 
 [작성 가이드라인]
 1. **포스트 제목 (title)**:
-   - 검색 유입에 최적화되고 클릭하고 싶은 형태 (예: "${dateFormatted} 주요 뉴스 브리핑: [토픽1 핵심]부터 [토픽2·3 요약]까지")
+   - 검색 유입에 최적화되고 클릭하고 싶은 형태 (예: "${dateFormatted} ${slotInfo.ko} 뉴스 브리핑: [토픽1 핵심]부터 [토픽2·3 요약]까지")
    - 45자 이내 한국어.
 2. **요약 (summary)**:
    - 검색엔진 메타 디스크립션(meta description) 및 본문 첫머리에 들어갈 2~3문장 요약 (120~160자 내외).
 3. **본문 (content)**:
    - GitHub Flavored Markdown 형식으로 작성.
    - 구성:
-     1) **서론**: ${dateFormatted} 하루 대한민국 이슈의 전반적인 맥락과 왜 이 3가지 이슈가 중요했는지 브리핑.
+     1) **서론**: ${dateFormatted} ${slotInfo.ko} 대한민국 이슈의 전반적인 맥락과 왜 이 3가지 이슈가 중요했는지 브리핑.
      2) **토픽별 심층 분석 (3개 각각 H2 제목 포함)**:
         - 사건 개요 및 배경
         - 시간 순서에 따른 전개 흐름 (마일스톤 활용)
         - 각 언론사들의 주요 보도 각도와 시각 차이
         - **중요 링크 삽입**: 토픽 상세 페이지 ([하이에나뉴스 토픽 타임라인 보기](https://hy3n4.news/topic/${topicRows[0]?.id})) 및 주요 언론사 보도 인용 링크 포함.
-     3) **마무리 및 내일의 관전 포인트**: 사회·경제적 시사점과 앞으로 지켜볼 포인트.
+     3) **마무리 및 관전 포인트**: 사회·경제적 시사점과 향후 지켜볼 포인트.
      4) **하이에나뉴스 서비스 안내**: "대한민국 주요 언론사의 헤드라인과 관점을 한눈에 비교하는 [하이에나뉴스 홈 바로가기](https://hy3n4.news)" 링크 포함.
 
 [출력 형식 가이드]
@@ -407,7 +529,7 @@ ${topicPrompts}
       accountId,
       `INSERT INTO blog_posts (slug, title, summary, content, topics_data, target_date, published_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      [slug, parsed.title, parsed.summary, parsed.content, topicsDataJson, targetDate]
+      [slug, parsed.title, parsed.summary, parsed.content, topicsDataJson, targetDateKey]
     );
     console.log(`   ✨ 새 블로그 포스트 등록 완료 (slug: ${slug})`);
   }

@@ -27,7 +27,7 @@ blogRouter.get("/blog", async (request, env, ctx) => {
     const { results } = await env.DB.prepare(`
       SELECT id, slug, title, summary, content, topics_data, target_date, published_at, created_at
       FROM blog_posts
-      ORDER BY target_date DESC
+      ORDER BY published_at DESC, id DESC
       LIMIT ? OFFSET ?
     `).bind(BLOG_PAGE_SIZE + 1, offset).all<BlogPostRecord>();
 
@@ -104,19 +104,19 @@ blogRouter.get(/^\/blog\/([a-zA-Z0-9_\-]+)$/, async (request, env, ctx, match) =
       const prevPost = await env.DB.prepare(`
         SELECT id, slug, title, target_date
         FROM blog_posts
-        WHERE target_date < ?
-        ORDER BY target_date DESC
+        WHERE id < ?
+        ORDER BY id DESC
         LIMIT 1
-      `).bind(post.target_date).first<BlogPostRecord>();
+      `).bind(post.id).first<BlogPostRecord>();
 
       // Next (newer) post
       const nextPost = await env.DB.prepare(`
         SELECT id, slug, title, target_date
         FROM blog_posts
-        WHERE target_date > ?
-        ORDER BY target_date ASC
+        WHERE id > ?
+        ORDER BY id ASC
         LIMIT 1
-      `).bind(post.target_date).first<BlogPostRecord>();
+      `).bind(post.id).first<BlogPostRecord>();
 
       return { post, prevPost: prevPost || null, nextPost: nextPost || null };
     }
@@ -171,7 +171,7 @@ blogRouter.get(/^\/blog\/([a-zA-Z0-9_\-]+)$/, async (request, env, ctx, match) =
  * GET /api/cron/daily-blog - Manual trigger & backfill endpoint (protected by secret key)
  * Usage:
  *   /api/cron/daily-blog?key=YOUR_CRON_SECRET
- *   /api/cron/daily-blog?key=YOUR_CRON_SECRET&date=2026-11-03
+ *   /api/cron/daily-blog?key=YOUR_CRON_SECRET&date=2026-11-04&slot=morning
  */
 blogRouter.get("/api/cron/daily-blog", async (request, env) => {
   const url = new URL(request.url);
@@ -180,9 +180,10 @@ blogRouter.get("/api/cron/daily-blog", async (request, env) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const dateParam = url.searchParams.get("date")?.trim(); // optional override
+  const dateParam = url.searchParams.get("date")?.trim(); // optional override (e.g. 2026-11-04)
+  const slotParam = url.searchParams.get("slot")?.trim() as any; // optional slot: morning | afternoon | evening
   try {
-    const result = await publishDailyBlogPost(env, dateParam || undefined);
+    const result = await publishDailyBlogPost(env, dateParam || undefined, slotParam || undefined);
     return new Response(JSON.stringify(result, null, 2), {
       status: result.success ? 200 : 400,
       headers: { "Content-Type": "application/json; charset=utf-8" },

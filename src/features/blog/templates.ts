@@ -123,12 +123,21 @@ function renderInlineMarkdown(text: string): string {
 }
 
 /**
- * Formats YYYY-MM-DD into Korean date string (예: 2026년 11월 4일)
+ * Formats YYYY-MM-DD or YYYY-MM-DD-slot into Korean date string
+ * (예: 2026년 11월 4일 아침 / 2026년 11월 4일)
  */
 export function formatKoreanDate(dateStr: string): string {
-  const parts = dateStr.split("-");
-  if (parts.length !== 3) return dateStr;
-  return `${parts[0]}년 ${parseInt(parts[1], 10)}월 ${parseInt(parts[2], 10)}일`;
+  const parts = (dateStr || "").split("-");
+  if (parts.length < 3) return dateStr;
+  const [y, m, d] = parts;
+  const base = `${y}년 ${parseInt(m, 10)}월 ${parseInt(d, 10)}일`;
+  if (parts.length >= 4) {
+    const slot = parts[3];
+    if (slot === "morning") return `${base} 아침`;
+    if (slot === "afternoon") return `${base} 오후`;
+    if (slot === "evening") return `${base} 저녁`;
+  }
+  return base;
 }
 
 /**
@@ -176,7 +185,7 @@ export function renderBlogListPage(
       <div class="empty-state">
         <p>아직 발행된 블로그 포스트가 없습니다.</p>
         <p style="font-size: 13px; color: var(--secondary); margin-top: 6px;">
-          매일 16:00 PST (한국시간 오전 9시)에 전날의 3대 핵심 뉴스 분석이 자동 발행됩니다.
+          매일 3회(아침 09:00, 오후 14:00, 저녁 20:00 KST) 대한민국 3대 핵심 뉴스 분석이 자동 발행됩니다.
         </p>
       </div>
     `;

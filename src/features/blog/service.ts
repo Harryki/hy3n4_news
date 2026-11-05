@@ -227,12 +227,18 @@ ${topicPrompts}
      3) **마무리 및 내일의 관전 포인트**: 사회·경제적 시사점과 앞으로 지켜볼 포인트.
      4) **하이에나뉴스 서비스 안내**: "대한민국 주요 언론사의 헤드라인과 관점을 한눈에 비교하는 [하이에나뉴스 홈 바로가기](https://hy3n4.news)" 링크 포함.
 
-[출력 JSON 스키마]
-{
-  "title": "블로그 포스트 제목",
-  "summary": "메타 디스크립션 및 요약 (150자 내외)",
-  "content": "마크다운 본문 문자열 (\\n 줄바꿈 포함)"
-}`;
+[출력 형식 가이드]
+반드시 다음 태그 구분자를 사용하여 답변하세요 (JSON 형식은 사용하지 마세요):
+
+<<<TITLE>>>
+블로그 포스트 제목 (45자 이내 한국어)
+
+<<<SUMMARY>>>
+검색엔진 메타 디스크립션 및 요약 (120~160자 내외 한국어)
+
+<<<CONTENT>>>
+마크다운 형식의 본문 내용 전체 (서론, 3개 토픽별 H2 심층 분석, 마무리 및 관전 포인트)
+<<<END>>>`;
 
   const blogModel = env.BLOG_LLM_MODEL || env.LLM_MODEL || "@cf/deepseek-ai/deepseek-v4.1-flash-1017";
   console.log(`[BLOG] Calling Workers AI with model: ${blogModel}`);
@@ -242,7 +248,7 @@ ${topicPrompts}
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    max_tokens: 2800,
+    max_tokens: 4096,
     chat_template_kwargs: { enable_thinking: false },
   })) as any;
 
@@ -255,26 +261,38 @@ ${topicPrompts}
   // Strip <think> tags if present in reasoning/deepseek models
   rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
-  // Strip markdown code block fences if present (```json ... ```)
+  // 1. Try Tag-based parsing (most robust for long markdown)
+  const titleMatch = rawText.match(/<<<TITLE>>>\s*([\s\S]*?)\s*(?:<<<SUMMARY>>>|<<<CONTENT>>>|$)/i);
+  const summaryMatch = rawText.match(/<<<SUMMARY>>>\s*([\s\S]*?)\s*(?:<<<CONTENT>>>|$)/i);
+  const contentMatch = rawText.match(/<<<CONTENT>>>\s*([\s\S]*?)\s*(?:<<<END>>>|$)/i);
+
+  if (titleMatch && contentMatch && titleMatch[1].trim() && contentMatch[1].trim()) {
+    return {
+      title: titleMatch[1].trim().replace(/^["']|["']$/g, ""),
+      summary: (summaryMatch ? summaryMatch[1].trim() : "").replace(/^["']|["']$/g, ""),
+      content: contentMatch[1].trim(),
+    };
+  }
+
+  // 2. Fallback to JSON parsing if model output JSON
   const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   const textToParse = codeBlockMatch ? codeBlockMatch[1] : rawText;
+  const jsonMatch = textToParse.match(/\{[\s\S]*\}/);
 
-  // Extract JSON object
-  const match = textToParse.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error("Failed to parse JSON response from Workers AI: " + rawText.slice(0, 300));
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.title && parsed.content) {
+        return {
+          title: String(parsed.title).trim(),
+          summary: String(parsed.summary || "").trim(),
+          content: String(parsed.content).trim(),
+        };
+      }
+    } catch {}
   }
 
-  const parsed = JSON.parse(match[0]);
-  if (!parsed.title || !parsed.content) {
-    throw new Error("Invalid blog post structure returned by AI");
-  }
-
-  return {
-    title: String(parsed.title).trim(),
-    summary: String(parsed.summary || "").trim(),
-    content: String(parsed.content).trim(),
-  };
+  throw new Error("Failed to parse blog post from AI response (neither tag format nor valid JSON found):\n" + rawText.slice(0, 300));
 }
 
 /**

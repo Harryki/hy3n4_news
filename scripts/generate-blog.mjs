@@ -314,19 +314,25 @@ ${topicPrompts}
      3) **마무리 및 내일의 관전 포인트**: 사회·경제적 시사점과 앞으로 지켜볼 포인트.
      4) **하이에나뉴스 서비스 안내**: "대한민국 주요 언론사의 헤드라인과 관점을 한눈에 비교하는 [하이에나뉴스 홈 바로가기](https://hy3n4.news)" 링크 포함.
 
-[출력 JSON 스키마]
-{
-  "title": "블로그 포스트 제목",
-  "summary": "메타 디스크립션 및 요약 (150자 내외)",
-  "content": "마크다운 본문 문자열 (\\n 줄바꿈 포함)"
-}`;
+[출력 형식 가이드]
+반드시 다음 태그 구분자를 사용하여 답변하세요 (JSON 형식은 사용하지 마세요):
+
+<<<TITLE>>>
+블로그 포스트 제목 (45자 이내 한국어)
+
+<<<SUMMARY>>>
+검색엔진 메타 디스크립션 및 요약 (120~160자 내외 한국어)
+
+<<<CONTENT>>>
+마크다운 형식의 본문 내용 전체 (서론, 3개 토픽별 H2 심층 분석, 마무리 및 관전 포인트)
+<<<END>>>`;
 
   const aiRes = await runAI(token, accountId, BLOG_MODEL, {
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    max_tokens: 2800,
+    max_tokens: 4096,
     chat_template_kwargs: { enable_thinking: false },
   });
 
@@ -337,15 +343,42 @@ ${topicPrompts}
     "";
 
   rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const textToParse = codeBlockMatch ? codeBlockMatch[1] : rawText;
-  const match = textToParse.match(/\{[\s\S]*\}/);
 
-  if (!match) {
-    throw new Error("AI 응답에서 JSON 파싱 실패:\n" + rawText.slice(0, 300));
+  // 1. Try Tag-based parsing (most robust for long markdown)
+  const titleMatch = rawText.match(/<<<TITLE>>>\s*([\s\S]*?)\s*(?:<<<SUMMARY>>>|<<<CONTENT>>>|$)/i);
+  const summaryMatch = rawText.match(/<<<SUMMARY>>>\s*([\s\S]*?)\s*(?:<<<CONTENT>>>|$)/i);
+  const contentMatch = rawText.match(/<<<CONTENT>>>\s*([\s\S]*?)\s*(?:<<<END>>>|$)/i);
+
+  let parsed = null;
+  if (titleMatch && contentMatch && titleMatch[1].trim() && contentMatch[1].trim()) {
+    parsed = {
+      title: titleMatch[1].trim().replace(/^["']|["']$/g, ""),
+      summary: (summaryMatch ? summaryMatch[1].trim() : "").replace(/^["']|["']$/g, ""),
+      content: contentMatch[1].trim(),
+    };
+  } else {
+    // 2. Fallback to JSON parsing if model output JSON
+    const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    const textToParse = codeBlockMatch ? codeBlockMatch[1] : rawText;
+    const jsonMatch = textToParse.match(/\{[\s\S]*\}/);
+
+    if (jsonMatch) {
+      try {
+        const jsonParsed = JSON.parse(jsonMatch[0]);
+        if (jsonParsed.title && jsonParsed.content) {
+          parsed = {
+            title: String(jsonParsed.title).trim(),
+            summary: String(jsonParsed.summary || "").trim(),
+            content: String(jsonParsed.content).trim(),
+          };
+        }
+      } catch {}
+    }
   }
 
-  const parsed = JSON.parse(match[0]);
+  if (!parsed || !parsed.title || !parsed.content) {
+    throw new Error("AI 응답 파싱 실패 (태그 형식 및 JSON 모두 미일치):\n" + rawText.slice(0, 300));
+  }
   console.log(`   ✅ 생성 완료: "${parsed.title}"`);
   console.log(`   📝 요약: ${parsed.summary}`);
 

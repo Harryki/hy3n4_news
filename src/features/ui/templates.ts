@@ -8,21 +8,38 @@ export const CSS_STYLES = `
       --bg: #f9e9da;
       --secondary: #4c393d;
       --border: #57352b;
-      --accent: #e5a657;
+      --accent: #9e5b10;
+      --surface: #ffffff;
+      --border-light: rgba(87, 53, 43, 0.15);
+      --primary: #9e5b10;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    ::selection {
+      background: rgba(158, 91, 16, 0.2);
+      color: var(--text);
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-sans);
       background: var(--bg);
       color: var(--text);
       max-width: 100%;
       margin: 0;
       padding: 0;
-      line-height: 1.4;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    header {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    .site-header {
+      font-family: var(--font-sans);
       background: var(--border);
       padding: 12px 20px;
       display: flex;
@@ -34,7 +51,7 @@ export const CSS_STYLES = `
       z-index: 100;
     }
 
-    header h1 {
+    .site-header h1 {
       font-weight: 400;
       font-size: 20px;
       color: var(--bg);
@@ -199,10 +216,10 @@ export const CSS_STYLES = `
 
     .filter-label {
       font-size: 12px;
-      font-weight: bold;
-      color: #888;
-      letter-spacing: 0.5px;
-      min-width: 45px;
+      font-weight: 700;
+      color: var(--secondary);
+      letter-spacing: 0.02em;
+      min-width: 72px;
     }
 
     .filter-btn {
@@ -270,31 +287,41 @@ export const CSS_STYLES = `
       gap: 8px;
     }
 
+    @media (max-width: 640px) {
+      .topic-pills {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+      }
+
+      .topic-pill {
+        flex: 0 0 auto;
+        max-width: 280px;
+        box-sizing: border-box;
+      }
+    }
+
     .topic-pill {
       text-decoration: none;
-      background: rgba(229, 166, 87, 0.15);
+      background: rgba(158, 91, 16, 0.1);
       color: var(--secondary);
       padding: 10px 14px;
-      border-radius: 12px;
+      border-radius: 10px;
       font-size: 13px;
-      font-weight: bold;
-      border: 1px solid rgba(229, 166, 87, 0.4);
-      transition: all 0.2s ease;
+      font-weight: 700;
+      border: 1px solid rgba(87, 53, 43, 0.18);
+      transition: all 0.15s ease;
       display: inline-flex;
       flex-direction: column;
       gap: 5px;
     }
 
     .topic-pill:hover {
-      background: rgba(229, 166, 87, 0.25);
+      background: rgba(158, 91, 16, 0.18);
       border-color: var(--accent);
-    }
-
-    @media (max-width: 640px) {
-      .topic-pill {
-        width: 100%;
-        box-sizing: border-box;
-      }
     }
     
     .topic-pill-header {
@@ -303,14 +330,15 @@ export const CSS_STYLES = `
     }
 
     .topic-pill-count {
-      opacity: 0.7;
-      font-size: 13px;
+      opacity: 0.75;
+      font-size: 12.5px;
       margin-left: 6px;
     }
     
     .topic-pill-keywords {
-      font-size: 13px;
-      color: #828282;
+      font-size: 12.5px;
+      color: var(--secondary);
+      opacity: 0.85;
       font-weight: normal;
     }
 
@@ -321,15 +349,14 @@ export const CSS_STYLES = `
     }
 
     .column-header {
-      font-family: "Godo", "Inter", Arial, sans-serif;
+      font-family: var(--font-sans);
       font-size: 16px;
-      font-weight: bold;
+      font-weight: 800;
       color: var(--secondary);
       border-bottom: 2px solid var(--border);
       padding-bottom: 8px;
       margin-bottom: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.02em;
     }
 
     .news-list {
@@ -349,37 +376,6 @@ export const CSS_STYLES = `
       background: rgba(87, 53, 43, 0.06);
     }
 
-    .news-rank {
-      color: var(--secondary);
-      font-size: 13px;
-      min-width: 24px;
-      text-align: right;
-      flex-shrink: 0;
-    }
-
-    .news-vote {
-      flex-shrink: 0;
-    }
-
-    .vote-btn {
-      background: none;
-      border: none;
-      color: var(--accent);
-      cursor: pointer;
-      font-size: 14px;
-      padding: 8px;
-      min-width: 44px;
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      line-height: 1;
-    }
-
-    .vote-btn:hover {
-      color: var(--text);
-    }
-
     .news-content {
       min-width: 0;
       display: flex;
@@ -391,12 +387,15 @@ export const CSS_STYLES = `
     .news-title {
       color: var(--text);
       text-decoration: none;
-      font-size: 15px;
-      white-space: nowrap;
+      font-size: 14.5px;
+      line-height: 1.42;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
-      display: block;
-      margin-bottom: 4px;
+      word-break: keep-all;
+      text-wrap: pretty;
+      margin-bottom: 6px;
     }
 
     .news-title:visited {
@@ -405,6 +404,22 @@ export const CSS_STYLES = `
 
     .news-title:hover {
       text-decoration: underline;
+      color: var(--primary);
+    }
+
+    .hot-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: rgba(158, 91, 16, 0.15);
+      color: var(--accent);
+      margin-left: 6px;
+      letter-spacing: 0.04em;
+      vertical-align: middle;
+      flex-shrink: 0;
     }
 
     .news-domain {
@@ -414,7 +429,8 @@ export const CSS_STYLES = `
 
     .news-item-meta {
       font-size: 12px;
-      color: #828282;
+      color: var(--secondary);
+      opacity: 0.85;
       margin-top: 6px;
     }
     
@@ -444,24 +460,6 @@ export const CSS_STYLES = `
       height: 20px;
       box-sizing: border-box;
       line-height: 1;
-    }
-
-    .meta-points {
-      color: var(--accent);
-      background: rgba(229, 166, 87, 0.12);
-      cursor: pointer;
-      border: none;
-      font-family: inherit;
-      transition: background 0.2s;
-    }
-    
-    .meta-points:hover {
-      background: rgba(229, 166, 87, 0.25);
-    }
-
-    .meta-views {
-      color: var(--secondary);
-      background: rgba(76, 57, 61, 0.2);
     }
 
     .meta-time {
@@ -578,7 +576,7 @@ export const CSS_STYLES = `
 
     .modal-search-form input {
       flex: 1;
-      font-family: 'Godo', Arial, serif;
+      font-family: var(--font-sans);
       background: rgba(87, 53, 43, 0.05);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -868,9 +866,9 @@ export const CSS_STYLES = `
 
     /* --- Blog System Styles --- */
     .blog-container {
-      max-width: 820px;
+      max-width: 760px;
       margin: 0 auto;
-      padding: 10px 4px 40px;
+      padding: 20px 16px 48px;
     }
 
     .blog-index-header {
@@ -880,32 +878,23 @@ export const CSS_STYLES = `
       margin-bottom: 24px;
     }
 
-    .blog-tagline {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.12em;
-      color: var(--secondary);
-      background: rgba(182, 73, 38, 0.1);
-      padding: 3px 10px;
-      border-radius: 999px;
+    .blog-index-title {
+      font-size: 28px;
+      font-weight: 850;
+      color: var(--border);
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
       margin-bottom: 12px;
     }
 
-    .blog-index-title {
-      font-size: 26px;
-      font-weight: 900;
-      color: var(--border);
-      line-height: 1.3;
-      margin-bottom: 10px;
-    }
-
     .blog-index-desc {
-      font-size: 14px;
+      font-size: 15px;
       color: var(--secondary);
-      line-height: 1.6;
-      max-width: 620px;
+      line-height: 1.65;
+      max-width: 600px;
       margin: 0 auto;
+      text-wrap: pretty;
     }
 
     .blog-feed {
@@ -926,7 +915,7 @@ export const CSS_STYLES = `
     .blog-card:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 16px rgba(87, 53, 43, 0.08);
-      border-color: rgba(182, 73, 38, 0.35);
+      border-color: rgba(158, 91, 16, 0.35);
     }
 
     .blog-card-meta {
@@ -941,9 +930,11 @@ export const CSS_STYLES = `
       background: var(--border);
       color: var(--bg);
       font-weight: 700;
-      padding: 2px 8px;
+      padding: 3px 9px;
       border-radius: 4px;
       font-size: 11.5px;
+      display: inline-block;
+      white-space: nowrap;
     }
 
     .blog-meta-time {
@@ -951,9 +942,11 @@ export const CSS_STYLES = `
     }
 
     .blog-card-title {
-      font-size: 19px;
+      font-size: 20px;
       font-weight: 800;
-      line-height: 1.4;
+      line-height: 1.35;
+      letter-spacing: -0.015em;
+      text-wrap: balance;
       margin-bottom: 10px;
     }
 
@@ -968,11 +961,12 @@ export const CSS_STYLES = `
     }
 
     .blog-card-summary {
-      font-size: 14px;
-      line-height: 1.65;
+      font-size: 14.5px;
+      line-height: 1.68;
       color: var(--text);
-      opacity: 0.88;
+      opacity: 0.9;
       margin-bottom: 14px;
+      text-wrap: pretty;
     }
 
     .blog-card-topics {
@@ -988,7 +982,7 @@ export const CSS_STYLES = `
       gap: 6px;
       font-size: 12px;
       font-weight: 600;
-      background: rgba(229, 166, 87, 0.15);
+      background: rgba(158, 91, 16, 0.1);
       border: 1px solid rgba(87, 53, 43, 0.18);
       padding: 3px 9px;
       border-radius: 6px;
@@ -998,7 +992,7 @@ export const CSS_STYLES = `
     }
 
     .blog-topic-pill:hover {
-      background: rgba(229, 166, 87, 0.3);
+      background: rgba(158, 91, 16, 0.2);
     }
 
     .blog-topic-pill .pill-count {
@@ -1065,23 +1059,30 @@ export const CSS_STYLES = `
       text-decoration: underline;
     }
 
+    .blog-breadcrumb .bc-sep {
+      margin: 0 6px;
+      opacity: 0.5;
+    }
+
     .blog-article {
       background: var(--surface);
       border: 1px solid var(--border-light);
       border-radius: 14px;
-      padding: 32px 28px;
+      padding: 36px 32px;
       box-shadow: 0 2px 8px rgba(87, 53, 43, 0.04);
     }
 
     @media (max-width: 640px) {
       .blog-article {
-        padding: 22px 16px;
+        padding: 24px 18px;
       }
     }
 
     .blog-article-header {
-      margin-bottom: 24px;
-      padding-bottom: 20px;
+      display: block;
+      background: transparent;
+      margin-bottom: 28px;
+      padding-bottom: 24px;
       border-bottom: 1.5px solid rgba(87, 53, 43, 0.15);
     }
 
@@ -1094,47 +1095,53 @@ export const CSS_STYLES = `
     }
 
     .blog-article-title {
-      font-size: 27px;
-      font-weight: 900;
+      font-size: 32px;
+      font-weight: 850;
       color: var(--border);
-      line-height: 1.35;
-      margin-bottom: 14px;
+      line-height: 1.3;
+      letter-spacing: -0.025em;
+      text-wrap: balance;
+      margin-bottom: 18px;
     }
 
     @media (max-width: 640px) {
       .blog-article-title {
-        font-size: 21px;
+        font-size: 23px;
+        line-height: 1.35;
       }
     }
 
     .blog-article-lead {
-      background: rgba(229, 166, 87, 0.12);
-      border-left: 4px solid var(--border);
-      padding: 12px 16px;
-      border-radius: 4px;
-      font-size: 14.5px;
-      line-height: 1.65;
+      background: rgba(158, 91, 16, 0.07);
+      border: 1px solid rgba(158, 91, 16, 0.2);
+      padding: 16px 20px;
+      border-radius: 8px;
+      font-size: 15px;
+      line-height: 1.7;
       color: var(--text);
+      text-wrap: pretty;
     }
 
     .blog-topics-spotlight {
-      background: #FFFDF9;
-      border: 1px solid rgba(87, 53, 43, 0.18);
+      background: rgba(87, 53, 43, 0.03);
+      border: 1px solid rgba(87, 53, 43, 0.15);
       border-radius: 10px;
-      padding: 16px;
-      margin-bottom: 28px;
+      padding: 18px 20px;
+      margin-top: 36px;
+      margin-bottom: 24px;
     }
 
     .spotlight-header {
-      font-size: 13px;
+      font-size: 13.5px;
       font-weight: 800;
       color: var(--border);
       margin-bottom: 12px;
+      letter-spacing: -0.01em;
     }
 
     .spotlight-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 10px;
     }
 
@@ -1143,7 +1150,7 @@ export const CSS_STYLES = `
       background: var(--surface);
       border: 1px solid var(--border-light);
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 12px 14px;
       text-decoration: none;
       transition: border-color 0.15s ease, transform 0.15s ease;
     }
@@ -1175,50 +1182,62 @@ export const CSS_STYLES = `
     }
 
     .blog-content {
-      font-size: 15.5px;
-      line-height: 1.8;
+      max-width: 660px;
+      margin: 0 auto;
+      font-size: 16px;
+      line-height: 1.85;
       color: var(--text);
       word-break: keep-all;
+      letter-spacing: -0.015em;
     }
 
     .blog-content .blog-h2 {
-      font-size: 20px;
-      font-weight: 900;
+      font-size: 23px;
+      font-weight: 800;
       color: var(--border);
-      margin: 32px 0 14px;
-      padding-bottom: 8px;
-      border-bottom: 2px solid rgba(182, 73, 38, 0.35);
-      line-height: 1.4;
+      margin: 44px 0 16px;
+      padding-bottom: 10px;
+      border-bottom: 1.5px solid rgba(87, 53, 43, 0.2);
+      line-height: 1.35;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
     }
 
     .blog-content .blog-h3 {
-      font-size: 17px;
-      font-weight: 800;
+      font-size: 18.5px;
+      font-weight: 750;
       color: var(--border);
-      margin: 22px 0 10px;
+      margin: 30px 0 12px;
+      line-height: 1.4;
+      letter-spacing: -0.01em;
+      text-wrap: balance;
     }
 
     .blog-content .blog-p {
-      margin-bottom: 16px;
+      margin-bottom: 20px;
+      text-wrap: pretty;
     }
 
     .blog-content .blog-list {
-      margin: 12px 0 18px 20px;
+      margin: 14px 0 20px 22px;
       padding: 0;
     }
 
     .blog-content .blog-list li {
       margin-bottom: 8px;
-      line-height: 1.65;
+      line-height: 1.7;
+      text-wrap: pretty;
     }
 
     .blog-content .blog-quote {
       background: rgba(87, 53, 43, 0.04);
-      border-left: 3px solid var(--secondary);
-      margin: 18px 0;
-      padding: 10px 16px;
-      border-radius: 4px;
-      font-style: italic;
+      border-left: 3px solid var(--border);
+      margin: 24px 0;
+      padding: 14px 20px;
+      font-style: normal;
+      color: var(--secondary);
+      line-height: 1.75;
+      text-wrap: pretty;
     }
 
     .blog-content .blog-link {
@@ -1229,23 +1248,24 @@ export const CSS_STYLES = `
 
     .blog-content .blog-code {
       background: rgba(87, 53, 43, 0.08);
+      color: var(--border);
       padding: 2px 6px;
       border-radius: 4px;
-      font-size: 0.9em;
-      font-family: monospace;
+      font-size: 0.88em;
+      font-family: var(--font-mono);
     }
 
     .blog-article-footer {
-      margin-top: 36px;
-      padding-top: 24px;
+      margin-top: 40px;
+      padding-top: 28px;
       border-top: 1.5px solid rgba(87, 53, 43, 0.15);
     }
 
     .blog-cta-box {
-      background: #FFF9ED;
-      border: 1.5px dashed rgba(182, 73, 38, 0.4);
+      background: rgba(158, 91, 16, 0.05);
+      border: 1px solid rgba(158, 91, 16, 0.2);
       border-radius: 10px;
-      padding: 18px 20px;
+      padding: 20px 24px;
       text-align: center;
       margin-bottom: 28px;
     }
@@ -1346,6 +1366,31 @@ export interface SeoOptions {
   hasFeedback?: boolean;
 }
 
+export function renderFilters(currentLimit: number = 25, currentTime: number = 24): string {
+  const limits = [5, 10, 15, 25];
+  const times = [1, 3, 6, 12, 24];
+
+  const limitsHtml = limits.map(l =>
+    `<a href="/?limit=${l}&time=${currentTime}" class="filter-btn ${l === currentLimit ? 'active' : ''}">${l}개</a>`
+  ).join('');
+
+  const timesHtml = times.map(t =>
+    `<a href="/?limit=${currentLimit}&time=${t}" class="filter-btn ${t === currentTime ? 'active' : ''}">${t}시간</a>`
+  ).join('');
+
+  return `
+    <div class="filters">
+        <div class="filter-group">
+            <span class="filter-label">언론사별 기사:</span>
+            ${limitsHtml}
+        </div>
+        <div class="filter-group">
+            <span class="filter-label">수집 기간:</span>
+            ${timesHtml}
+        </div>
+    </div>`;
+}
+
 export function renderHTML(
   content: string,
   user: string | null = null,
@@ -1356,16 +1401,6 @@ export function renderHTML(
   const authHtml = user
     ? `<div class="auth-area"><a href="/user" class="user-name">${user}</a> | <a href="/logout">로그아웃</a></div>`
     : `<div class="auth-area"><a href="/login">login</a></div>`;
-
-  const limits = [5, 10, 15, 25];
-  const limitsHtml = `<!--limits-->${limits.map(l =>
-    `<a href="/?limit=${l}&time=${currentTime}" class="filter-btn ${l === currentLimit ? 'active' : ''}">${l}개</a>`
-  ).join('')}<!--/limits-->`;
-
-  const times = [1, 3, 6, 12, 24];
-  const timesHtml = `<!--times-->${times.map(t =>
-    `<a href="/?limit=${currentLimit}&time=${t}" class="filter-btn ${t === currentTime ? 'active' : ''}">${t}시간</a>`
-  ).join('')}<!--/times-->`;
 
   const pageTitle = seo.title || "하이에나뉴스 | 주요 언론사 실시간 헤드라인 & 핫토픽 모아보기";
   const pageDescription =
@@ -1403,7 +1438,7 @@ export function renderHTML(
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(pageTitle)}</title>
   <meta name="description" content="${escapeHtml(pageDescription)}">
   ${robotsMeta}
@@ -1446,7 +1481,7 @@ export function renderHTML(
     });
   </script>
   <div class="app-container">
-    <header>
+    <header class="site-header">
       <h1>
         <a href="/" style="color: var(--bg); text-decoration: none; display: flex; align-items: center; gap: 8px;">
           <img src="/hyena.svg" alt="logo" style="width: 28px; height: 28px; object-fit: contain;">
@@ -1476,7 +1511,7 @@ export function renderHTML(
     <div id="search-modal" class="modal-overlay">
       <div class="modal-content">
         <form class="modal-search-form" action="/search" method="GET">
-          <input type="text" name="q" placeholder="토픽을 검색해보세용" autocomplete="off" autofocus />
+          <input type="text" name="q" placeholder="관심 있는 이슈나 언론사 토픽을 검색해보세요" autocomplete="off" autofocus />
           <button type="submit">검색</button>
         </form>
       </div>
@@ -1748,8 +1783,8 @@ export function renderHTML(
         }
       };
 
-      // Auto-trigger popup immediately if not done and not snoozed (or forced via ?fb=1)
-      if (forceFbOpen || (!isFbDone() && !isFbSnoozed())) {
+      // Open feedback modal if explicitly forced via query parameter (?fb=1)
+      if (forceFbOpen) {
         openFeedbackModal();
       }
 
@@ -1758,6 +1793,11 @@ export function renderHTML(
           modal.style.display = 'none';
           toggleSidebar(false);
           if (fbModal.classList.contains('open')) closeFeedbackModal(true);
+        } else if ((e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+          e.preventDefault();
+          modal.style.display = 'flex';
+          const input = modal.querySelector('input');
+          if (input) input.focus();
         }
       };
     </script>
@@ -1790,17 +1830,16 @@ export function renderNewsList(sourceName: string, news: any[]) {
     let titleWeight = viewCount >= 1 ? '600' : 'normal';
 
     if (viewCount >= 2) {
-      fireHtml = '<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="hot" style="width: 16px; height: 16px; margin-left: 2px;">'.repeat(2);
+      fireHtml = '<span class="hot-badge" title="인기 기사">HOT 2</span>';
     } else if (viewCount === 1) {
-      fireHtml = '<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="hot" style="width: 16px; height: 16px; margin-left: 2px;">';
+      fireHtml = '<span class="hot-badge" title="인기 기사">HOT</span>';
     }
 
     html += `
         <li class="news-item">
           <div class="news-content">
-            <a href="/go/${item.id}" rel="nofollow" target="_blank" class="news-title" style="display: flex; align-items: center;">
-              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: ${titleWeight};">${item.title}</span>
-              <span style="flex-shrink: 0; display: inline-flex; margin-left: 4px;">${fireHtml}</span>
+            <a href="/go/${item.id}" rel="nofollow" target="_blank" class="news-title">
+              <span style="font-weight: ${titleWeight};">${item.title}</span>${fireHtml}
             </a>
             <div class="news-meta">
               <span class="meta-pill meta-time">${timeStr}</span>
@@ -1965,17 +2004,16 @@ export function renderWideNewsList(news: any[]) {
     let titleWeight = viewCount >= 1 ? '600' : 'normal';
 
     if (viewCount >= 2) {
-      fireHtml = '<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="hot" style="width: 16px; height: 16px; margin-left: 2px;">'.repeat(2);
+      fireHtml = '<span class="hot-badge" title="인기 기사">HOT 2</span>';
     } else if (viewCount === 1) {
-      fireHtml = '<img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif" alt="hot" style="width: 16px; height: 16px; margin-left: 2px;">';
+      fireHtml = '<span class="hot-badge" title="인기 기사">HOT</span>';
     }
 
     html += `
         <li class="news-item" style="border-bottom: 1px dashed rgba(87,53,43,0.2); padding: 16px 0;">
           <div class="news-content">
-            <a href="/go/${item.id}" target="_blank" class="news-title" style="display: flex; align-items: center;">
-              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: ${titleWeight};">${item.title}</span>
-              <span style="flex-shrink: 0; display: inline-flex; margin-left: 4px;">${fireHtml}</span>
+            <a href="/go/${item.id}" target="_blank" class="news-title">
+              <span style="font-weight: ${titleWeight};">${item.title}</span>${fireHtml}
             </a>
             <div class="news-meta">
               <span class="meta-pill" style="background:rgba(87,53,43,0.1); color:var(--secondary);">${item.source_name}</span>

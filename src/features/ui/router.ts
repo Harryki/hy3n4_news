@@ -1,7 +1,7 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { getRelativeTime } from "../../core/utils";
-import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults, renderPagination, renderTopicTimeline, SeoOptions } from "./templates";
+import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults, renderPagination, renderTopicTimeline, renderFilters, SeoOptions } from "./templates";
 
 export const uiRouter = new Router();
 
@@ -188,19 +188,7 @@ export function renderPage(
     content += renderTopics(hotTopics);
   }
 
-  const filtersHtml = renderHTML('', null, currentLimit, currentTime);
-  const limitsPart = filtersHtml.match(/<!--limits-->([\s\S]*?)<!--\/limits-->/)?.[1] || '';
-  const timesPart = filtersHtml.match(/<!--times-->([\s\S]*?)<!--\/times-->/)?.[1] || '';
-
-  content += `
-    <div class="filters">
-        <div class="filter-group">
-            ${limitsPart}
-        </div>
-        <div class="filter-group">
-            ${timesPart}
-        </div>
-    </div>`;
+  content += renderFilters(currentLimit, currentTime);
 
   const itemsBySource: Record<string, any[]> = {};
 

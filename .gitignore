@@ -7,3 +7,6 @@ dist/
 plan.md
 test_rate_limit.sh
 .DS_Store
+.agent/
+.impeccable/
+.github/hooks/

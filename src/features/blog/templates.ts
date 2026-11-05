@@ -197,7 +197,6 @@ export function renderBlogListPage(
   return `
     <div class="blog-container">
       <header class="blog-index-header">
-        <div class="blog-tagline">AI NEWS INSIGHT & DEEP DIVE</div>
         <h1 class="blog-index-title">하이에나뉴스 일일 이슈 브리핑</h1>
         <p class="blog-index-desc">
           대한민국 주요 언론사들의 기사를 AI로 클러스터링하여, 매일 가장 뜨거웠던 3대 핵심 토픽의 전개 과정과 언론사별 시각을 심층 정리합니다.
@@ -230,9 +229,9 @@ export function renderBlogPostPage(
 
   const topicCardsHtml = topics.length > 0
     ? `
-      <div class="blog-topics-spotlight">
+      <section class="blog-topics-spotlight" aria-label="관련 뉴스 토픽">
         <div class="spotlight-header">
-          <span>🎯 오늘 다룬 핵심 뉴스 토픽 (실시간 타임라인)</span>
+          <span>관련 실시간 토픽 타임라인 (하이에나 클러스터)</span>
         </div>
         <div class="spotlight-grid">
           ${topics.map((t) => `
@@ -246,7 +245,7 @@ export function renderBlogPostPage(
             </a>
           `).join("")}
         </div>
-      </div>
+      </section>
     `
     : "";
 
@@ -287,7 +286,7 @@ export function renderBlogPostPage(
 
     <div class="blog-container">
       <nav class="blog-breadcrumb" aria-label="Breadcrumb">
-        <a href="/">홈</a> &gt; <a href="/blog">블로그</a> &gt; <span>${formatKoreanDate(post.target_date)}</span>
+        <a href="/">홈</a><span class="bc-sep" aria-hidden="true">/</span><a href="/blog">블로그</a><span class="bc-sep" aria-hidden="true">/</span><span>${formatKoreanDate(post.target_date)}</span>
       </nav>
 
       <article class="blog-article">
@@ -302,15 +301,15 @@ export function renderBlogPostPage(
           </div>
         </header>
 
-        ${topicCardsHtml}
-
         <div class="blog-content">
           ${contentHtml}
         </div>
 
         <footer class="blog-article-footer">
+          ${topicCardsHtml}
+
           <div class="blog-cta-box">
-            <div class="cta-title">📢 실시간 언론사별 뉴스 비교는 하이에나뉴스에서</div>
+            <div class="cta-title">실시간 언론사별 뉴스 비교는 하이에나뉴스에서</div>
             <p class="cta-desc">
               하이에나뉴스는 대한민국 주요 언론사의 보도를 실시간으로 수집하여 동일 사건의 언론사별 관점과 타임라인을 제공합니다.
             </p>

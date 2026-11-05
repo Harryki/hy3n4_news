@@ -828,10 +828,11 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
             t2.updated_at,
             (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
           FROM topics t2
-          -- updated_at >= created_at always holds, so this bound is implied by the created_at
-          -- filter but lets SQLite range-search idx_topics_recent_full instead of scanning
-          -- the whole topics table (was ~35k rows read per call).
-          WHERE t2.updated_at >= datetime('now', '-10 days')
+          -- The updated_at bound drives a range search on idx_topics_recent_full (the whole
+          -- topics table was scanned before, ~35k rows/call). It is capped at 3 days (not the
+          -- 10-day created_at window) because when <16 topics match, SQLite reads the entire
+          -- range: 10d cost ~3.4k rows/call. Only topics active in the last 3 days are linked.
+          WHERE t2.updated_at >= datetime('now', '-3 days')
             AND t2.created_at >= datetime('now', '-10 days')
             AND t2.id != ?
             AND (${likeClauses})

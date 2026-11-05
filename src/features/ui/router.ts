@@ -832,8 +832,9 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
           -- topics table was scanned before, ~35k rows/call). It is capped at 3 days (not the
           -- 10-day created_at window) because when <16 topics match, SQLite reads the entire
           -- range: 10d cost ~3.4k rows/call. Only topics active in the last 3 days are linked.
+          -- No created_at filter: topics stop receiving updates 10 days after creation
+          -- (queue.ts guard), so this only lets recently-closed topics appear as background.
           WHERE t2.updated_at >= datetime('now', '-3 days')
-            AND t2.created_at >= datetime('now', '-10 days')
             AND t2.id != ?
             AND (${likeClauses})
           ORDER BY t2.updated_at DESC

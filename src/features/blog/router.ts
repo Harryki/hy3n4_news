@@ -20,26 +20,32 @@ blogRouter.get("/blog", async (request, env, ctx) => {
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const offset = (page - 1) * BLOG_PAGE_SIZE;
 
-  const cacheKey = `https://cache.hy3n4.news/d1/blog/list?page=${page}`;
-  const data = await withEdgeCache<{ posts: BlogPostRecord[]; hasMore: boolean }>(
-    cacheKey,
-    EDGE_CACHE_TTL_SECONDS,
-    ctx,
-    async () => {
-      const { results } = await env.DB.prepare(`
-        SELECT id, slug, title, summary, content, topics_data, target_date, published_at, created_at
-        FROM blog_posts
-        ORDER BY target_date DESC
-        LIMIT ? OFFSET ?
-      `).bind(BLOG_PAGE_SIZE + 1, offset).all<BlogPostRecord>();
+  const isRefresh = url.searchParams.has("refresh") || Boolean(user);
+  const cacheKey = `https://cache.hy3n4.news/d1/blog/v2/list?page=${page}`;
+  
+  const fetchFromDb = async () => {
+    const { results } = await env.DB.prepare(`
+      SELECT id, slug, title, summary, content, topics_data, target_date, published_at, created_at
+      FROM blog_posts
+      ORDER BY target_date DESC
+      LIMIT ? OFFSET ?
+    `).bind(BLOG_PAGE_SIZE + 1, offset).all<BlogPostRecord>();
 
-      const rows = results || [];
-      const hasMore = rows.length > BLOG_PAGE_SIZE;
-      const posts = hasMore ? rows.slice(0, BLOG_PAGE_SIZE) : rows;
+    const rows = results || [];
+    const hasMore = rows.length > BLOG_PAGE_SIZE;
+    const posts = hasMore ? rows.slice(0, BLOG_PAGE_SIZE) : rows;
 
-      return { posts, hasMore };
-    }
-  );
+    return { posts, hasMore };
+  };
+
+  const data = isRefresh
+    ? await fetchFromDb()
+    : await withEdgeCache<{ posts: BlogPostRecord[]; hasMore: boolean }>(
+        cacheKey,
+        EDGE_CACHE_TTL_SECONDS,
+        ctx,
+        fetchFromDb
+      );
 
   const content = renderBlogListPage(data.posts, page, data.hasMore);
   const pageTitle = page > 1
@@ -59,7 +65,8 @@ blogRouter.get("/blog", async (request, env, ctx) => {
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": PUBLIC_HTML_CACHE_CONTROL,
+        "Cache-Control": isRefresh ? "private, no-cache" : PUBLIC_HTML_CACHE_CONTROL,
+        "Vary": "Cookie",
       },
     }
   );

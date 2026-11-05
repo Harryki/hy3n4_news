@@ -234,25 +234,35 @@ ${topicPrompts}
   "content": "마크다운 본문 문자열 (\\n 줄바꿈 포함)"
 }`;
 
-  const aiRes = (await env.AI.run(env.LLM_MODEL, {
+  const blogModel = env.BLOG_LLM_MODEL || env.LLM_MODEL || "@cf/deepseek-ai/deepseek-v4.1-flash-1017";
+  console.log(`[BLOG] Calling Workers AI with model: ${blogModel}`);
+
+  const aiRes = (await env.AI.run(blogModel, {
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    max_tokens: 2500,
+    max_tokens: 2800,
     chat_template_kwargs: { enable_thinking: false },
   })) as any;
 
-  const rawText: string =
+  let rawText: string =
     aiRes?.response ||
     aiRes?.choices?.[0]?.message?.content ||
     aiRes?.choices?.[0]?.message?.reasoning_content ||
     "";
 
-  // Parse JSON
-  const match = rawText.trim().match(/\{[\s\S]*\}/);
+  // Strip <think> tags if present in reasoning/deepseek models
+  rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // Strip markdown code block fences if present (```json ... ```)
+  const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  const textToParse = codeBlockMatch ? codeBlockMatch[1] : rawText;
+
+  // Extract JSON object
+  const match = textToParse.match(/\{[\s\S]*\}/);
   if (!match) {
-    throw new Error("Failed to parse JSON response from Workers AI: " + rawText.slice(0, 200));
+    throw new Error("Failed to parse JSON response from Workers AI: " + rawText.slice(0, 300));
   }
 
   const parsed = JSON.parse(match[0]);

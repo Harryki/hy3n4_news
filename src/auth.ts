@@ -8,6 +8,8 @@ export interface Env {
   RATE_LIMITER?: { limit: (opts: { key: string }) => Promise<{ success: boolean }> };
   EMBEDDING_MODEL: string;
   LLM_MODEL: string;
+  BLOG_LLM_MODEL?: string;
+  CRON_SECRET?: string;
 }
 
 interface GoogleTokenResponse {

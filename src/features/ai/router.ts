@@ -113,8 +113,8 @@ aiRouter.get("/api/search", async (request, env) => {
     : null;
 
   const whereClause = semanticPlaceholders
-    ? `id IN (${semanticPlaceholders}) OR title LIKE ? OR keywords LIKE ?`
-    : `title LIKE ? OR keywords LIKE ?`;
+    ? `t.id IN (${semanticPlaceholders}) OR (t.updated_at >= datetime('now', '-14 days') AND (t.title LIKE ? OR t.keywords LIKE ?))`
+    : `t.updated_at >= datetime('now', '-14 days') AND (t.title LIKE ? OR t.keywords LIKE ?)`;
 
   const bindParams = semanticPlaceholders
     ? [...semanticIds, `%${q}%`, `%${q}%`, PAGE_SIZE + 1, offset]
@@ -122,9 +122,9 @@ aiRouter.get("/api/search", async (request, env) => {
 
   const { results: rawTopics } = await env.DB.prepare(`
         SELECT t.id, t.title, t.keywords, t.updated_at,
-               (SELECT COUNT(*) FROM news_topics nt WHERE nt.topic_id = t.id) as article_count
+               MAX(t.last_summarized_count, 1) as article_count
         FROM topics t
-        WHERE ${whereClause.replace(/title/g, 't.title').replace(/keywords/g, 't.keywords').replace(/id/g, 't.id')}
+        WHERE ${whereClause}
         ORDER BY t.updated_at DESC
         LIMIT ? OFFSET ?
     `).bind(...bindParams).all();

@@ -124,7 +124,7 @@ export function renderPage(
     };
 
     if (topicId) {
-      const topicHasMore = news.length === 50;
+      const topicHasMore = news.length === 30;
       const topicPrevUrl = page > 1 ? `/topic/${topicId}?page=${page - 1}` : null;
       const topicNextUrl = topicHasMore ? `/topic/${topicId}?page=${page + 1}` : null;
       const topicFirstUrl = page > 1 ? `/topic/${topicId}?page=1` : null;
@@ -309,12 +309,33 @@ function getCookie(request: Request, name: string): string | null {
 export const EDGE_CACHE_TTL_SECONDS = 1800; // 30 minutes (matches RSS cron interval */30 * * * *)
 export const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300, s-maxage=1800, stale-while-revalidate=1800";
 
+const MEMORY_CACHE_MAX_ENTRIES = 300;
+const memoryCache = new Map<string, { expiresAt: number; data: any }>();
+
+function setMemoryCache(key: string, data: any, ttlSeconds: number) {
+  if (memoryCache.size >= MEMORY_CACHE_MAX_ENTRIES) {
+    const oldestKey = memoryCache.keys().next().value;
+    if (oldestKey) memoryCache.delete(oldestKey);
+  }
+  memoryCache.set(key, {
+    expiresAt: Date.now() + ttlSeconds * 1000,
+    data,
+  });
+}
+
 export async function withEdgeCache<T>(
   cacheKeyUrl: string,
   ttlSeconds: number,
   ctx: ExecutionContext | undefined,
   fetcher: () => Promise<T>
 ): Promise<T> {
+  // 1. Check fast in-memory isolate cache first
+  const memHit = memoryCache.get(cacheKeyUrl);
+  if (memHit && Date.now() < memHit.expiresAt) {
+    return memHit.data as T;
+  }
+
+  // 2. Check Cloudflare Edge Cache API
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const cacheReq = new Request(cacheKeyUrl, { method: "GET" });
 
@@ -322,27 +343,34 @@ export async function withEdgeCache<T>(
     try {
       const cachedRes = await cache.match(cacheReq);
       if (cachedRes) {
-        return (await cachedRes.json()) as T;
+        const parsed = (await cachedRes.json()) as T;
+        setMemoryCache(cacheKeyUrl, parsed, ttlSeconds);
+        return parsed;
       }
     } catch (e) {
       console.warn("[CACHE] Edge cache read failed:", e);
     }
   }
 
+  // 3. Cache miss: query D1
   const data = await fetcher();
 
-  if (cache && data !== null && data !== undefined) {
-    const resToCache = new Response(JSON.stringify(data), {
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": `public, max-age=${ttlSeconds}, s-maxage=${ttlSeconds}`,
-      },
-    });
-    const putPromise = cache.put(cacheReq, resToCache).catch((e) => {
-      console.warn("[CACHE] Edge cache write failed:", e);
-    });
-    if (ctx && typeof ctx.waitUntil === "function") {
-      ctx.waitUntil(putPromise);
+  if (data !== null && data !== undefined) {
+    setMemoryCache(cacheKeyUrl, data, ttlSeconds);
+
+    if (cache) {
+      const resToCache = new Response(JSON.stringify(data), {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": `public, max-age=${ttlSeconds}, s-maxage=${ttlSeconds}`,
+        },
+      });
+      const putPromise = cache.put(cacheReq, resToCache).catch((e) => {
+        console.warn("[CACHE] Edge cache write failed:", e);
+      });
+      if (ctx && typeof ctx.waitUntil === "function") {
+        ctx.waitUntil(putPromise);
+      }
     }
   }
 
@@ -393,7 +421,7 @@ export async function fetchHotTopicsCached(
   env: Env,
   ctx?: ExecutionContext
 ): Promise<TopicRow[]> {
-  const topicsCacheKey = `https://hy3n4.news/__cache/d1/hot-topics/v5`;
+  const topicsCacheKey = `https://hy3n4.news/__cache/d1/hot-topics/v6`;
 
   return withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     const { results } = await env.DB.prepare(`
@@ -409,6 +437,7 @@ export async function fetchHotTopicsCached(
         CROSS JOIN news_topics nt ON nt.topic_id = t.id
         WHERE t.updated_at >= datetime('now', '-24 hours')
           AND t.created_at >= datetime('now', '-10 days')
+          AND t.last_summarized_count >= 2
         GROUP BY t.updated_at, t.id
         HAVING article_count > 1
         ORDER BY trending_score DESC
@@ -565,15 +594,15 @@ uiRouter.get("/search", async (request, env) => {
 
     const semanticPlaceholders = semanticIds.length > 0 ? semanticIds.map(() => '?').join(',') : null;
     const whereClause = semanticPlaceholders
-      ? `t.id IN (${semanticPlaceholders}) OR t.title LIKE ? OR t.keywords LIKE ?`
-      : `t.title LIKE ? OR t.keywords LIKE ?`;
+      ? `t.id IN (${semanticPlaceholders}) OR (t.updated_at >= datetime('now', '-14 days') AND (t.title LIKE ? OR t.keywords LIKE ?))`
+      : `t.updated_at >= datetime('now', '-14 days') AND (t.title LIKE ? OR t.keywords LIKE ?)`;
     const bindParams = semanticPlaceholders
       ? [...semanticIds, `%${q}%`, `%${q}%`]
       : [`%${q}%`, `%${q}%`];
 
     const { results } = await env.DB.prepare(`
             SELECT t.id, t.title, t.keywords, t.updated_at,
-                   (SELECT COUNT(*) FROM news_topics nt WHERE nt.topic_id = t.id) as article_count
+                   MAX(t.last_summarized_count, 1) as article_count
             FROM topics t
             WHERE ${whereClause}
             ORDER BY t.updated_at DESC
@@ -584,8 +613,9 @@ uiRouter.get("/search", async (request, env) => {
     // Latest Topics
     const { results } = await env.DB.prepare(`
             SELECT t.id, t.title, t.keywords, t.updated_at,
-                   (SELECT COUNT(*) FROM news_topics nt WHERE nt.topic_id = t.id) as article_count
+                   MAX(t.last_summarized_count, 1) as article_count
             FROM topics t
+            WHERE t.last_summarized_count >= 2
             ORDER BY t.updated_at DESC
             LIMIT ? OFFSET ?
         `).bind(limit + 1, offset).all();
@@ -700,7 +730,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
   const fromTopicId = Number.isFinite(rawFrom) && rawFrom > 0 && rawFrom !== topicId ? rawFrom : null;
   const user = await getSessionUser(request, env);
 
-  const topicCacheKey = `https://hy3n4.news/__cache/d1/topic/v7/${topicId}?page=${page}`;
+  const topicCacheKey = `https://hy3n4.news/__cache/d1/topic/v8/${topicId}?page=${page}`;
   const topicData = await withEdgeCache<{
     topicRow: { id: number; title: string; created_at: string; updated_at: string; keywords: string; milestones: string | null } | null;
     news: NewsRow[];
@@ -714,20 +744,20 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
       return { topicRow: null, news: [], relatedTopics: [] };
     }
 
-    const { results: news } = await env.DB.prepare(`
-        WITH paged_news AS (
-            SELECT n.id, n.source_id, n.title, n.url, n.description, n.published_at, n.created_at
-            FROM news_topics nt
-            JOIN news n ON n.id = nt.news_id
-            WHERE nt.topic_id = ?
-            ORDER BY n.published_at DESC
-            LIMIT 50 OFFSET ?
-        )
-        SELECT n.id, n.title, n.url, n.description, n.published_at, n.created_at, s.name as source_name,
-               (SELECT group_concat(t2.keywords, ', ') FROM news_topics nt2 JOIN topics t2 ON nt2.topic_id = t2.id WHERE nt2.news_id = n.id) as keywords
-        FROM paged_news n
+    const { results: rawNews } = await env.DB.prepare(`
+        SELECT n.id, n.title, n.url, n.description, n.published_at, n.created_at, s.name as source_name
+        FROM news_topics nt
+        JOIN news n ON n.id = nt.news_id
         CROSS JOIN sources s ON n.source_id = s.id
-    `).bind(topicId, (page - 1) * 50).all<NewsRow>();
+        WHERE nt.topic_id = ?
+        ORDER BY n.published_at DESC
+        LIMIT 30 OFFSET ?
+    `).bind(topicId, (page - 1) * 30).all<NewsRow>();
+
+    const news: NewsRow[] = (rawNews ?? []).map((item) => ({
+      ...item,
+      keywords: topicRow.keywords || "",
+    }));
 
     const relatedMap = new Map<number, RelatedTopicNode>();
 
@@ -741,22 +771,23 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
         return "related";
       };
 
-      // 1. Direct Graph Edges via Shared Articles (news_topics intersection)
-      // Aggregate shared-article pairs first (index-only on news_topics), so the per-topic
-      // article_count subquery runs once per candidate instead of in SELECT + HAVING + ORDER BY.
-      // COUNT(*) == COUNT(DISTINCT news_id) here because (news_id, topic_id) is the PK.
+      // Direct Graph Edges via Shared Articles (news_topics intersection)
+      // Uses covering index on news_topics with early LIMIT 8 before joining topics,
+      // and reads t2.last_summarized_count instead of running N correlated COUNT(*) subqueries.
       const { results: sharedEdges } = await env.DB.prepare(`
-        WITH shared_ranked AS MATERIALIZED (
+        WITH shared_ranked AS (
           SELECT
             nt_shared.topic_id,
             COUNT(*) as shared_news_count,
-            MAX(nt_shared.news_id) as pivot_news_id,
-            (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = nt_shared.topic_id) as article_count
-          FROM news_topics nt1
+            MAX(nt_shared.news_id) as pivot_news_id
+          FROM (
+            SELECT news_id FROM news_topics WHERE topic_id = ? ORDER BY news_id DESC LIMIT 25
+          ) nt1
           CROSS JOIN news_topics nt_shared
-            ON nt1.news_id = nt_shared.news_id AND nt_shared.topic_id != nt1.topic_id
-          WHERE nt1.topic_id = ?
+            ON nt1.news_id = nt_shared.news_id AND nt_shared.topic_id != ?
           GROUP BY nt_shared.topic_id
+          ORDER BY shared_news_count DESC, pivot_news_id DESC
+          LIMIT 8
         )
         SELECT
           t2.id,
@@ -767,13 +798,13 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
           t2.updated_at,
           sr.shared_news_count,
           sr.pivot_news_id,
-          sr.article_count
+          MAX(t2.last_summarized_count, sr.shared_news_count) as article_count
         FROM shared_ranked sr
         CROSS JOIN topics t2 ON t2.id = sr.topic_id
-        WHERE sr.article_count >= 2
-        ORDER BY sr.shared_news_count DESC, sr.article_count DESC, t2.updated_at DESC
-        LIMIT 12
-      `).bind(topicId).all<{
+        WHERE t2.last_summarized_count >= 2 OR sr.shared_news_count >= 2
+        ORDER BY sr.shared_news_count DESC, t2.updated_at DESC
+        LIMIT 8
+      `).bind(topicId, topicId).all<{
         id: number;
         title: string;
         keywords: string | null;
@@ -786,7 +817,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
       }>();
 
       for (const edge of sharedEdges ?? []) {
-        if (edge.article_count <= 2 && edge.shared_news_count >= edge.article_count && (news?.length ?? 0) <= 2) {
+        if (edge.article_count <= 2 && edge.shared_news_count >= edge.article_count && news.length <= 2) {
           continue;
         }
         relatedMap.set(edge.id, {
@@ -794,59 +825,9 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
           relation_type: classifyRelation(edge.created_at),
         });
       }
-
-      // 2. Thematic / Keyword Graph Edges (recent topics sharing keywords)
-      // OPTIMIZATION: Only run this fallback scan if we don't already have enough direct shared-article edges (< 4)!
-      const kwTokens = (topicRow.keywords || "")
-        .split(",")
-        .map((k) => k.trim())
-        .filter((k) => k.length >= 2)
-        .slice(0, 3);
-
-      if (relatedMap.size < 4 && kwTokens.length > 0) {
-        const likeClauses = kwTokens.map(() => "t2.keywords LIKE ?").join(" OR ");
-        const likeParams = kwTokens.map((k) => `%${k}%`);
-        const { results: kwEdges } = await env.DB.prepare(`
-          SELECT
-            t2.id,
-            t2.title,
-            t2.keywords,
-            t2.milestones,
-            t2.created_at,
-            t2.updated_at,
-            (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
-          FROM topics t2
-          WHERE t2.updated_at >= datetime('now', '-36 hours')
-            AND t2.id != ?
-            AND (${likeClauses})
-          ORDER BY t2.updated_at DESC
-          LIMIT 6
-        `).bind(topicId, ...likeParams).all<{
-          id: number;
-          title: string;
-          keywords: string | null;
-          milestones: string | null;
-          created_at: string;
-          updated_at: string;
-          article_count: number;
-        }>();
-
-        for (const ke of kwEdges ?? []) {
-          if (ke.article_count < 2 || relatedMap.has(ke.id)) continue;
-          const matchedKws = kwTokens.filter((k) => (ke.keywords || "").includes(k));
-          relatedMap.set(ke.id, {
-            ...ke,
-            shared_news_count: 0,
-            pivot_news_id: null,
-            shared_keywords: matchedKws,
-            relation_type: classifyRelation(ke.created_at),
-          });
-          if (relatedMap.size >= 6) break;
-        }
-      }
     }
 
-    return { topicRow, news: news ?? [], relatedTopics: Array.from(relatedMap.values()) };
+    return { topicRow, news, relatedTopics: Array.from(relatedMap.values()) };
   });
 
   if (!topicData.topicRow) {
@@ -872,7 +853,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
         t2.milestones,
         t2.created_at,
         t2.updated_at,
-        (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
+        MAX(t2.last_summarized_count, 2) as article_count
       FROM topics t2
       WHERE t2.id = ?
     `).bind(fromTopicId).first<{

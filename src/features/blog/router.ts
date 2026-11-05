@@ -21,7 +21,7 @@ blogRouter.get("/blog", async (request, env, ctx) => {
   const offset = (page - 1) * BLOG_PAGE_SIZE;
 
   const isRefresh = url.searchParams.has("refresh") || Boolean(user);
-  const cacheKey = `https://cache.hy3n4.news/d1/blog/v2/list?page=${page}`;
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v3/list?page=${page}`;
   
   const fetchFromDb = async () => {
     const { results } = await env.DB.prepare(`
@@ -80,7 +80,7 @@ blogRouter.get(/^\/blog\/([a-zA-Z0-9_\-]+)$/, async (request, env, ctx, match) =
   const slug = match![1];
   const user = await getSessionUser(request, env);
 
-  const cacheKey = `https://cache.hy3n4.news/d1/blog/post/${encodeURIComponent(slug)}`;
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v3/post/${encodeURIComponent(slug)}`;
   const data = await withEdgeCache<{
     post: BlogPostRecord | null;
     prevPost: BlogPostRecord | null;

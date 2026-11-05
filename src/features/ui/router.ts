@@ -358,7 +358,7 @@ export async function fetchNewsCached(
 ): Promise<NewsRow[]> {
   const offset = (page - 1) * limit;
   const upperLimit = page * limit;
-  const newsCacheKey = `https://cache.hy3n4.news/d1/news?time=${timeHours}&limit=${limit}&page=${page}`;
+  const newsCacheKey = `https://hy3n4.news/__cache/d1/news?time=${timeHours}&limit=${limit}&page=${page}`;
 
   return withEdgeCache<NewsRow[]>(newsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     const now = new Date();
@@ -393,7 +393,7 @@ export async function fetchHotTopicsCached(
   env: Env,
   ctx?: ExecutionContext
 ): Promise<TopicRow[]> {
-  const topicsCacheKey = `https://cache.hy3n4.news/d1/hot-topics/v4`;
+  const topicsCacheKey = `https://hy3n4.news/__cache/d1/hot-topics/v5`;
 
   return withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     const { results } = await env.DB.prepare(`
@@ -456,7 +456,7 @@ export async function fetchSitemapTopicsCached(
   env: Env,
   ctx?: ExecutionContext
 ): Promise<{ id: number; updated_at: string }[]> {
-  const sitemapCacheKey = `https://cache.hy3n4.news/d1/sitemap-topics`;
+  const sitemapCacheKey = `https://hy3n4.news/__cache/d1/sitemap-topics`;
 
   return withEdgeCache<{ id: number; updated_at: string }[]>(
     sitemapCacheKey,
@@ -700,7 +700,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
   const fromTopicId = Number.isFinite(rawFrom) && rawFrom > 0 && rawFrom !== topicId ? rawFrom : null;
   const user = await getSessionUser(request, env);
 
-  const topicCacheKey = `https://cache.hy3n4.news/d1/topic/v6/${topicId}?page=${page}&from=${fromTopicId || 0}`;
+  const topicCacheKey = `https://hy3n4.news/__cache/d1/topic/v7/${topicId}?page=${page}`;
   const topicData = await withEdgeCache<{
     topicRow: { id: number; title: string; created_at: string; updated_at: string; keywords: string; milestones: string | null } | null;
     news: NewsRow[];
@@ -792,18 +792,18 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
         relatedMap.set(edge.id, {
           ...edge,
           relation_type: classifyRelation(edge.created_at),
-          is_from: edge.id === fromTopicId,
         });
       }
 
       // 2. Thematic / Keyword Graph Edges (recent topics sharing keywords)
+      // OPTIMIZATION: Only run this fallback scan if we don't already have enough direct shared-article edges (< 4)!
       const kwTokens = (topicRow.keywords || "")
         .split(",")
         .map((k) => k.trim())
         .filter((k) => k.length >= 2)
-        .slice(0, 4);
+        .slice(0, 3);
 
-      if (kwTokens.length > 0) {
+      if (relatedMap.size < 4 && kwTokens.length > 0) {
         const likeClauses = kwTokens.map(() => "t2.keywords LIKE ?").join(" OR ");
         const likeParams = kwTokens.map((k) => `%${k}%`);
         const { results: kwEdges } = await env.DB.prepare(`
@@ -816,17 +816,11 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
             t2.updated_at,
             (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
           FROM topics t2
-          -- The updated_at bound drives a range search on idx_topics_recent_full (the whole
-          -- topics table was scanned before, ~35k rows/call). It is capped at 3 days (not the
-          -- 10-day created_at window) because when <16 topics match, SQLite reads the entire
-          -- range: 10d cost ~3.4k rows/call. Only topics active in the last 3 days are linked.
-          -- No created_at filter: topics stop receiving updates 10 days after creation
-          -- (queue.ts guard), so this only lets recently-closed topics appear as background.
-          WHERE t2.updated_at >= datetime('now', '-3 days')
+          WHERE t2.updated_at >= datetime('now', '-36 hours')
             AND t2.id != ?
             AND (${likeClauses})
           ORDER BY t2.updated_at DESC
-          LIMIT 16
+          LIMIT 6
         `).bind(topicId, ...likeParams).all<{
           id: number;
           title: string;
@@ -846,42 +840,8 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
             pivot_news_id: null,
             shared_keywords: matchedKws,
             relation_type: classifyRelation(ke.created_at),
-            is_from: ke.id === fromTopicId,
           });
-        }
-      }
-
-      // 3. Ensure bidirectional return to `fromTopicId` if user navigated here via a topic link
-      if (fromTopicId && !relatedMap.has(fromTopicId)) {
-        const fromRow = await env.DB.prepare(`
-          SELECT
-            t2.id,
-            t2.title,
-            t2.keywords,
-            t2.milestones,
-            t2.created_at,
-            t2.updated_at,
-            (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
-          FROM topics t2
-          WHERE t2.id = ?
-        `).bind(fromTopicId).first<{
-          id: number;
-          title: string;
-          keywords: string | null;
-          milestones: string | null;
-          created_at: string;
-          updated_at: string;
-          article_count: number;
-        }>();
-
-        if (fromRow) {
-          relatedMap.set(fromRow.id, {
-            ...fromRow,
-            shared_news_count: 0,
-            pivot_news_id: null,
-            relation_type: classifyRelation(fromRow.created_at),
-            is_from: true,
-          });
+          if (relatedMap.size >= 6) break;
         }
       }
     }
@@ -891,6 +851,52 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
 
   if (!topicData.topicRow) {
     return new Response(renderNotFoundPage(user), { status: 404, headers: { "Content-Type": "text/html; charset=utf-8" } });
+  }
+
+  // Personalize is_from flag and add fromTopic if missing (without busting global edge cache)
+  let relatedTopics: RelatedTopicNode[] = (topicData.relatedTopics || []).map((r) => ({
+    ...r,
+    is_from: fromTopicId ? r.id === fromTopicId : false,
+  }));
+
+  if (fromTopicId && !relatedTopics.some((r) => r.id === fromTopicId)) {
+    const curCreatedMs = topicData.topicRow?.created_at
+      ? new Date(topicData.topicRow.created_at.replace(" ", "T") + "Z").getTime()
+      : Date.now();
+
+    const fromRow = await env.DB.prepare(`
+      SELECT
+        t2.id,
+        t2.title,
+        t2.keywords,
+        t2.milestones,
+        t2.created_at,
+        t2.updated_at,
+        (SELECT COUNT(*) FROM news_topics nt_all WHERE nt_all.topic_id = t2.id) as article_count
+      FROM topics t2
+      WHERE t2.id = ?
+    `).bind(fromTopicId).first<{
+      id: number;
+      title: string;
+      keywords: string | null;
+      milestones: string | null;
+      created_at: string;
+      updated_at: string;
+      article_count: number;
+    }>();
+
+    if (fromRow) {
+      const edgeCreatedMs = new Date(fromRow.created_at.replace(" ", "T") + "Z").getTime();
+      const diffMinutes = (edgeCreatedMs - curCreatedMs) / (1000 * 60);
+      const relation_type = diffMinutes < -30 ? "prior" : diffMinutes > 30 ? "next" : "related";
+      relatedTopics.push({
+        ...fromRow,
+        shared_news_count: 0,
+        pivot_news_id: null,
+        relation_type,
+        is_from: true,
+      });
+    }
   }
 
   const html = renderPage(
@@ -905,7 +911,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     topicData.topicRow.updated_at,
     topicData.topicRow.keywords,
     topicData.topicRow.milestones,
-    topicData.relatedTopics
+    relatedTopics
   );
   return new Response(html, {
     headers: {

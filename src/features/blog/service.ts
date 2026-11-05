@@ -240,7 +240,7 @@ ${topicPrompts}
 마크다운 형식의 본문 내용 전체 (서론, 3개 토픽별 H2 심층 분석, 마무리 및 관전 포인트)
 <<<END>>>`;
 
-  const blogModel = env.BLOG_LLM_MODEL || env.LLM_MODEL || "@cf/deepseek-ai/deepseek-v4.1-flash-1017";
+  const blogModel = env.BLOG_LLM_MODEL || env.LLM_MODEL || "@cf/google/gemma-4-26b-a4b-it";
   console.log(`[BLOG] Calling Workers AI with model: ${blogModel}`);
 
   const aiRes = (await env.AI.run(blogModel, {

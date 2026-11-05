@@ -13,7 +13,7 @@ import path from "node:path";
 
 const DATABASE_ID = "15bbb429-a4bf-4c66-81fb-73ad4ea7e3ff";
 const WRANGLER_CLIENT_ID = "54d11594-84e4-41aa-b438-e81b8fa78ee7";
-const BLOG_MODEL = "@cf/deepseek-ai/deepseek-v4.1-flash-1017";
+const BLOG_MODEL = process.env.BLOG_LLM_MODEL || "@cf/google/gemma-4-26b-a4b-it";
 
 async function getCloudflareToken(forceRefresh = false) {
   const candidates = [

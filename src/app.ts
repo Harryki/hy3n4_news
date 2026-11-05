@@ -10,6 +10,8 @@ import {
 import { rssRouter } from "./features/rss/router";
 import { userRouter } from "./features/user/router";
 import { aiRouter } from "./features/ai/router";
+import { blogRouter } from "./features/blog/router";
+import { ensureBlogTable } from "./features/blog/service";
 import { getSessionUser } from "./auth";
 
 export const app = new Router();
@@ -125,6 +127,7 @@ app.get("/robots.txt", () => {
     .map(
       (bot) => `User-agent: ${bot}
 Allow: /
+Allow: /blog
 Allow: /api/trends
 Allow: /llms.txt
 Allow: /llms-full.txt
@@ -138,11 +141,13 @@ Disallow: /api/feedback`
 
 User-agent: *
 Allow: /
+Allow: /blog
 Disallow: /go/
 Disallow: /auth/
 Disallow: /api/feedback
 
 # AI Agent & LLM Context Endpoints
+# Daily Blog: https://hy3n4.news/blog
 # LLMs Briefing: https://hy3n4.news/llms.txt
 # LLMs Full Snapshot: https://hy3n4.news/llms-full.txt
 # Structured Trends JSON: https://hy3n4.news/api/trends
@@ -198,10 +203,19 @@ app.get("/llms-full.txt", async (_request, env, ctx) => {
   });
 });
 
-// SEO: Dynamic sitemap.xml (includes active topic cluster pages from last 10 days, cached at Edge for 30m)
+// SEO: Dynamic sitemap.xml (includes active topic cluster pages and blog posts, cached at Edge for 30m)
 app.get("/sitemap.xml", async (_request, env, ctx) => {
   const topics = await fetchSitemapTopicsCached(env, ctx);
   const nowIso = new Date().toISOString();
+
+  let blogPosts: Array<{ slug: string; published_at: string }> = [];
+  try {
+    await ensureBlogTable(env.DB);
+    const { results } = await env.DB.prepare(
+      "SELECT slug, published_at FROM blog_posts ORDER BY published_at DESC LIMIT 100"
+    ).all<{ slug: string; published_at: string }>();
+    blogPosts = results || [];
+  } catch {}
 
   const topicUrls = (topics ?? [])
     .map((t) => {
@@ -212,15 +226,25 @@ app.get("/sitemap.xml", async (_request, env, ctx) => {
     })
     .join("\n");
 
+  const blogUrls = blogPosts
+    .map((p) => {
+      const lastMod = p.published_at
+        ? new Date(p.published_at.endsWith("Z") ? p.published_at : `${p.published_at.replace(" ", "T")}Z`).toISOString()
+        : nowIso;
+      return `  <url><loc>https://hy3n4.news/blog/${escapeXml(p.slug)}</loc><lastmod>${escapeXml(lastMod)}</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>`;
+    })
+    .join("\n");
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://hy3n4.news/</loc><lastmod>${escapeXml(nowIso)}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://hy3n4.news/blog</loc><lastmod>${escapeXml(nowIso)}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>
   <url><loc>https://hy3n4.news/search</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
   <url><loc>https://hy3n4.news/llms.txt</loc><changefreq>hourly</changefreq><priority>0.6</priority></url>
   <url><loc>https://hy3n4.news/llms-full.txt</loc><changefreq>hourly</changefreq><priority>0.6</priority></url>
   <url><loc>https://hy3n4.news/guidelines</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
   <url><loc>https://hy3n4.news/legal</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>
-${topicUrls ? `${topicUrls}\n` : ""}</urlset>`;
+${blogUrls ? `${blogUrls}\n` : ""}${topicUrls ? `${topicUrls}\n` : ""}</urlset>`;
 
   return new Response(xml, {
     headers: {
@@ -232,6 +256,7 @@ ${topicUrls ? `${topicUrls}\n` : ""}</urlset>`;
 
 // Merge Feature Routers
 app.use(uiRouter);
+app.use(blogRouter);
 app.use(rssRouter);
 app.use(userRouter);
 app.use(aiRouter);

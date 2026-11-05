@@ -118,3 +118,19 @@ CREATE TABLE IF NOT EXISTS feedbacks (
 
 CREATE INDEX IF NOT EXISTS idx_feedbacks_created_at ON feedbacks(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_feedbacks_visitor_id ON feedbacks(visitor_id);
+
+-- Daily SEO Blog: AI-generated daily topic recaps
+CREATE TABLE IF NOT EXISTS blog_posts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  content TEXT NOT NULL,
+  topics_data TEXT,
+  target_date TEXT UNIQUE NOT NULL,
+  published_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_blog_posts_target_date ON blog_posts(target_date DESC);

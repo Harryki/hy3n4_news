@@ -19,7 +19,7 @@ index_name = "news-topics-index-dev"
 remote = true
 
 [triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/30 * * * *", "0 0 * * *"]
 
 [[queues.producers]]
 binding = "NEWS_PROCESSING_QUEUE"
@@ -57,7 +57,7 @@ routes = [
 ]
 
 [env.production.triggers]
-crons = ["*/30 * * * *"]
+crons = ["*/30 * * * *", "0 0 * * *"]
 
 [env.production.vars]
 GOOGLE_CLIENT_ID = "5439287092-mfrbcjgop304q6d8693avajaagc8gk87.apps.googleusercontent.com"

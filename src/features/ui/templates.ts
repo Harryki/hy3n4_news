@@ -199,8 +199,7 @@ export const CSS_STYLES = `
     .filters {
       display: flex;
       flex-wrap: wrap;
-      padding: 15px 20px;
-      display: flex;
+      padding: 15px 0;
       flex-direction: column;
       gap: 15px;
       background: var(--bg);
@@ -257,13 +256,15 @@ export const CSS_STYLES = `
       padding: 20px 0px;
     }
 
-    @media (max-width: 640px) {
-      .app-container { padding: 0; }
-      .news-columns { padding: 0 0 8px; gap: 12px; }
-    }
-
     main {
       padding: 0 20px;
+    }
+
+    @media (max-width: 640px) {
+      .app-container { padding: 0; }
+      .site-header { padding: 12px 16px; }
+      main { padding: 0 16px; }
+      .news-columns { padding: 0 0 8px; gap: 12px; }
     }
 
     .hot-topics {
@@ -868,11 +869,11 @@ export const CSS_STYLES = `
     .blog-container {
       max-width: 760px;
       margin: 0 auto;
-      padding: 20px 16px 48px;
+      padding: 20px 0 48px;
     }
 
     .blog-index-header {
-      padding: 24px 16px 28px;
+      padding: 24px 0 28px;
       text-align: center;
       border-bottom: 1.5px solid rgba(87, 53, 43, 0.15);
       margin-bottom: 24px;
@@ -907,7 +908,7 @@ export const CSS_STYLES = `
       background: var(--surface);
       border: 1px solid var(--border-light);
       border-radius: 12px;
-      padding: 22px 20px;
+      padding: 24px 24px;
       box-shadow: 0 2px 6px rgba(87, 53, 43, 0.04);
       transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
     }
@@ -1046,8 +1047,8 @@ export const CSS_STYLES = `
     .blog-breadcrumb {
       font-size: 12.5px;
       color: var(--secondary);
-      margin-bottom: 16px;
-      padding: 0 4px;
+      margin-bottom: 14px;
+      padding: 0;
     }
 
     .blog-breadcrumb a {
@@ -1067,15 +1068,9 @@ export const CSS_STYLES = `
     .blog-article {
       background: var(--surface);
       border: 1px solid var(--border-light);
-      border-radius: 14px;
+      border-radius: 12px;
       padding: 36px 32px;
       box-shadow: 0 2px 8px rgba(87, 53, 43, 0.04);
-    }
-
-    @media (max-width: 640px) {
-      .blog-article {
-        padding: 24px 18px;
-      }
     }
 
     .blog-article-header {
@@ -1104,13 +1099,6 @@ export const CSS_STYLES = `
       margin-bottom: 18px;
     }
 
-    @media (max-width: 640px) {
-      .blog-article-title {
-        font-size: 23px;
-        line-height: 1.35;
-      }
-    }
-
     .blog-article-lead {
       background: rgba(158, 91, 16, 0.07);
       border: 1px solid rgba(158, 91, 16, 0.2);
@@ -1129,6 +1117,59 @@ export const CSS_STYLES = `
       padding: 18px 20px;
       margin-top: 36px;
       margin-bottom: 24px;
+    }
+
+    @media (max-width: 640px) {
+      .blog-container {
+        padding: 16px 0 36px;
+      }
+
+      .blog-index-header {
+        padding: 12px 0 20px;
+        margin-bottom: 16px;
+      }
+
+      .blog-index-title {
+        font-size: 23px;
+      }
+
+      .blog-feed {
+        gap: 14px;
+      }
+
+      .blog-card,
+      .blog-article {
+        padding: 20px 16px;
+        border-radius: 12px;
+      }
+
+      .blog-article-header {
+        margin-bottom: 22px;
+        padding-bottom: 18px;
+      }
+
+      .blog-article-title {
+        font-size: 22px;
+        line-height: 1.35;
+      }
+
+      .blog-article-lead {
+        padding: 14px 16px;
+        font-size: 14.5px;
+      }
+
+      .blog-topics-spotlight {
+        padding: 16px 16px;
+        margin-top: 28px;
+      }
+
+      .blog-cta-box {
+        padding: 18px 16px;
+      }
+
+      .blog-content .blog-quote {
+        padding: 12px 16px;
+      }
     }
 
     .spotlight-header {

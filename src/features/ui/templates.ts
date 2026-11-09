@@ -867,56 +867,55 @@ export const CSS_STYLES = `
 
     /* --- Blog System Styles --- */
     .blog-container {
-      max-width: 760px;
+      max-width: 800px;
       margin: 0 auto;
       padding: 20px 0 48px;
     }
 
     .blog-index-header {
-      padding: 24px 0 28px;
-      text-align: center;
-      border-bottom: 1.5px solid rgba(87, 53, 43, 0.15);
-      margin-bottom: 24px;
+      padding: 16px 0 22px;
+      text-align: left;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 4px;
     }
 
     .blog-index-title {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 850;
       color: var(--border);
       line-height: 1.3;
       letter-spacing: -0.02em;
       text-wrap: balance;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
     .blog-index-desc {
-      font-size: 15px;
+      font-size: 14.5px;
       color: var(--secondary);
       line-height: 1.65;
-      max-width: 600px;
-      margin: 0 auto;
+      max-width: none;
+      margin: 0;
       text-wrap: pretty;
     }
 
     .blog-feed {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 0;
     }
 
     .blog-card {
-      background: var(--surface);
-      border: 1px solid var(--border-light);
-      border-radius: 12px;
-      padding: 24px 24px;
-      box-shadow: 0 2px 6px rgba(87, 53, 43, 0.04);
-      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      background: transparent;
+      border: none;
+      border-bottom: 1px dashed rgba(87, 53, 43, 0.3);
+      border-radius: 0;
+      padding: 22px 0;
+      box-shadow: none;
     }
 
     .blog-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(87, 53, 43, 0.08);
-      border-color: rgba(158, 91, 16, 0.35);
+      transform: none;
+      box-shadow: none;
     }
 
     .blog-card-meta {
@@ -1004,8 +1003,7 @@ export const CSS_STYLES = `
     .blog-card-footer {
       display: flex;
       justify-content: flex-end;
-      border-top: 1px dashed rgba(87, 53, 43, 0.15);
-      padding-top: 12px;
+      padding-top: 4px;
     }
 
     .blog-read-more {
@@ -1030,9 +1028,9 @@ export const CSS_STYLES = `
 
     .blog-pagination .pagination-btn {
       padding: 8px 14px;
-      border: 1px solid var(--border-light);
+      border: 1px solid rgba(87, 53, 43, 0.25);
       border-radius: 6px;
-      background: var(--surface);
+      background: rgba(87, 53, 43, 0.05);
       color: var(--border);
       text-decoration: none;
       font-weight: 600;
@@ -1066,19 +1064,19 @@ export const CSS_STYLES = `
     }
 
     .blog-article {
-      background: var(--surface);
-      border: 1px solid var(--border-light);
-      border-radius: 12px;
-      padding: 36px 32px;
-      box-shadow: 0 2px 8px rgba(87, 53, 43, 0.04);
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
     }
 
     .blog-article-header {
       display: block;
       background: transparent;
-      margin-bottom: 28px;
-      padding-bottom: 24px;
-      border-bottom: 1.5px solid rgba(87, 53, 43, 0.15);
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid var(--border);
     }
 
     .blog-article-meta {
@@ -1090,13 +1088,13 @@ export const CSS_STYLES = `
     }
 
     .blog-article-title {
-      font-size: 32px;
+      font-size: 28px;
       font-weight: 850;
       color: var(--border);
       line-height: 1.3;
       letter-spacing: -0.025em;
       text-wrap: balance;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .blog-article-lead {
@@ -1111,7 +1109,7 @@ export const CSS_STYLES = `
     }
 
     .blog-topics-spotlight {
-      background: rgba(87, 53, 43, 0.03);
+      background: rgba(87, 53, 43, 0.04);
       border: 1px solid rgba(87, 53, 43, 0.15);
       border-radius: 10px;
       padding: 18px 20px;
@@ -1121,31 +1119,33 @@ export const CSS_STYLES = `
 
     @media (max-width: 640px) {
       .blog-container {
-        padding: 16px 0 36px;
+        padding: 12px 0 36px;
       }
 
       .blog-index-header {
-        padding: 12px 0 20px;
-        margin-bottom: 16px;
+        padding: 10px 0 18px;
+        margin-bottom: 2px;
       }
 
       .blog-index-title {
-        font-size: 23px;
+        font-size: 22px;
       }
 
       .blog-feed {
-        gap: 14px;
+        gap: 0;
       }
 
-      .blog-card,
+      .blog-card {
+        padding: 18px 0;
+      }
+
       .blog-article {
-        padding: 20px 16px;
-        border-radius: 12px;
+        padding: 0;
       }
 
       .blog-article-header {
-        margin-bottom: 22px;
-        padding-bottom: 18px;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
       }
 
       .blog-article-title {
@@ -1188,17 +1188,17 @@ export const CSS_STYLES = `
 
     .spotlight-card {
       display: block;
-      background: var(--surface);
-      border: 1px solid var(--border-light);
+      background: rgba(87, 53, 43, 0.05);
+      border: 1px solid rgba(87, 53, 43, 0.18);
       border-radius: 8px;
       padding: 12px 14px;
       text-decoration: none;
-      transition: border-color 0.15s ease, transform 0.15s ease;
+      transition: border-color 0.15s ease, background 0.15s ease;
     }
 
     .spotlight-card:hover {
       border-color: var(--primary);
-      transform: translateY(-1px);
+      background: rgba(158, 91, 16, 0.1);
     }
 
     .spotlight-card-title {
@@ -1223,8 +1223,9 @@ export const CSS_STYLES = `
     }
 
     .blog-content {
-      max-width: 660px;
-      margin: 0 auto;
+      max-width: none;
+      width: 100%;
+      margin: 0;
       font-size: 16px;
       line-height: 1.85;
       color: var(--text);

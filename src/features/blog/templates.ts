@@ -18,54 +18,69 @@ export function markdownToHtml(md: string): string {
   // Normalize newlines
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   const htmlOut: string[] = [];
-  let inList = false;
+  let inList: "ul" | "ol" | null = null;
   let inBlockquote = false;
 
+  const closeBlocks = () => {
+    if (inList) {
+      htmlOut.push(`</${inList}>`);
+      inList = null;
+    }
+    if (inBlockquote) {
+      htmlOut.push("</blockquote>");
+      inBlockquote = false;
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
+    const line = lines[i];
+    const trimmed = line.trim();
 
     // Empty line
-    if (!line.trim()) {
-      if (inList) {
-        htmlOut.push("</ul>");
-        inList = false;
-      }
-      if (inBlockquote) {
-        htmlOut.push("</blockquote>");
-        inBlockquote = false;
-      }
+    if (!trimmed) {
+      closeBlocks();
+      continue;
+    }
+
+    // Horizontal rules (---, ***, ___) -> omit since H2 headings already carry section dividers
+    if (/^(?:[-*_]\s*){3,}$/.test(trimmed)) {
+      closeBlocks();
       continue;
     }
 
     // Headers
-    const h3Match = line.match(/^###\s+(.+)$/);
+    const h4Match = trimmed.match(/^####\s+(.+)$/);
+    if (h4Match) {
+      closeBlocks();
+      htmlOut.push(`<h4 class="blog-h3">${renderInlineMarkdown(h4Match[1])}</h4>`);
+      continue;
+    }
+
+    const h3Match = trimmed.match(/^###\s+(.+)$/);
     if (h3Match) {
-      if (inList) { htmlOut.push("</ul>"); inList = false; }
-      if (inBlockquote) { htmlOut.push("</blockquote>"); inBlockquote = false; }
+      closeBlocks();
       htmlOut.push(`<h3 class="blog-h3">${renderInlineMarkdown(h3Match[1])}</h3>`);
       continue;
     }
 
-    const h2Match = line.match(/^##\s+(.+)$/);
+    const h2Match = trimmed.match(/^##\s+(.+)$/);
     if (h2Match) {
-      if (inList) { htmlOut.push("</ul>"); inList = false; }
-      if (inBlockquote) { htmlOut.push("</blockquote>"); inBlockquote = false; }
+      closeBlocks();
       htmlOut.push(`<h2 class="blog-h2">${renderInlineMarkdown(h2Match[1])}</h2>`);
       continue;
     }
 
-    const h1Match = line.match(/^#\s+(.+)$/);
+    const h1Match = trimmed.match(/^#\s+(.+)$/);
     if (h1Match) {
-      if (inList) { htmlOut.push("</ul>"); inList = false; }
-      if (inBlockquote) { htmlOut.push("</blockquote>"); inBlockquote = false; }
+      closeBlocks();
       htmlOut.push(`<h2 class="blog-h2 blog-h1-as-h2">${renderInlineMarkdown(h1Match[1])}</h2>`);
       continue;
     }
 
     // Blockquotes
-    const bqMatch = line.match(/^>\s*(.*)$/);
+    const bqMatch = trimmed.match(/^>\s*(.*)$/);
     if (bqMatch) {
-      if (inList) { htmlOut.push("</ul>"); inList = false; }
+      if (inList) { htmlOut.push(`</${inList}>`); inList = null; }
       if (!inBlockquote) {
         htmlOut.push(`<blockquote class="blog-quote">`);
         inBlockquote = true;
@@ -78,25 +93,45 @@ export function markdownToHtml(md: string): string {
     }
 
     // Unordered lists
-    const listMatch = line.match(/^[-*]\s+(.+)$/);
-    if (listMatch) {
+    const ulMatch = trimmed.match(/^[-*]\s+(.+)$/);
+    if (ulMatch) {
+      if (inList === "ol") {
+        htmlOut.push("</ol>");
+        inList = null;
+      }
       if (!inList) {
         htmlOut.push(`<ul class="blog-list">`);
-        inList = true;
+        inList = "ul";
       }
-      htmlOut.push(`<li>${renderInlineMarkdown(listMatch[1])}</li>`);
+      htmlOut.push(`<li>${renderInlineMarkdown(ulMatch[1])}</li>`);
       continue;
-    } else if (inList) {
-      htmlOut.push("</ul>");
-      inList = false;
+    }
+
+    // Ordered lists
+    const olMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (olMatch) {
+      if (inList === "ul") {
+        htmlOut.push("</ul>");
+        inList = null;
+      }
+      if (!inList) {
+        htmlOut.push(`<ol class="blog-list">`);
+        inList = "ol";
+      }
+      htmlOut.push(`<li>${renderInlineMarkdown(olMatch[1])}</li>`);
+      continue;
+    }
+
+    if (inList) {
+      htmlOut.push(`</${inList}>`);
+      inList = null;
     }
 
     // Paragraph
-    htmlOut.push(`<p class="blog-p">${renderInlineMarkdown(line)}</p>`);
+    htmlOut.push(`<p class="blog-p">${renderInlineMarkdown(trimmed)}</p>`);
   }
 
-  if (inList) htmlOut.push("</ul>");
-  if (inBlockquote) htmlOut.push("</blockquote>");
+  closeBlocks();
 
   return htmlOut.join("\n");
 }
@@ -141,6 +176,30 @@ export function formatKoreanDate(dateStr: string): string {
 }
 
 /**
+ * Converts a SQLite UTC datetime string ("YYYY-MM-DD HH:MM:SS" or ISO) into KST (+09:00).
+ */
+export function formatUtcToKst(utcStr: string, includeTime: boolean = true): string {
+  if (!utcStr) return "";
+  const normalized = utcStr.includes("T")
+    ? (utcStr.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(utcStr) ? utcStr : `${utcStr}Z`)
+    : `${utcStr.replace(" ", "T")}Z`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return includeTime ? utcStr.slice(0, 16) : utcStr.slice(0, 10);
+  }
+  const kst = new Date(parsed.getTime() + 9 * 3600 * 1000);
+  const y = kst.getUTCFullYear();
+  const m = String(kst.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(kst.getUTCDate()).padStart(2, "0");
+  if (!includeTime) {
+    return `${y}-${m}-${d}`;
+  }
+  const hh = String(kst.getUTCHours()).padStart(2, "0");
+  const mm = String(kst.getUTCMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d} ${hh}:${mm}`;
+}
+
+/**
  * Renders the Blog List page.
  */
 export function renderBlogListPage(
@@ -166,7 +225,7 @@ export function renderBlogListPage(
           <article class="blog-card">
             <div class="blog-card-meta">
               <span class="blog-date-badge">${formatKoreanDate(post.target_date)}</span>
-              <span class="blog-meta-time">발행 ${post.published_at.slice(0, 10)}</span>
+              <span class="blog-meta-time">발행 ${formatUtcToKst(post.published_at, true)} KST</span>
             </div>
             <h2 class="blog-card-title">
               <a href="/blog/${escapeHtml(post.slug)}">${escapeHtml(post.title)}</a>
@@ -302,7 +361,7 @@ export function renderBlogPostPage(
         <header class="blog-article-header">
           <div class="blog-article-meta">
             <span class="blog-date-badge">${formatKoreanDate(post.target_date)} 브리핑</span>
-            <span class="blog-meta-time">발행일: ${post.published_at.slice(0, 16)} KST</span>
+            <span class="blog-meta-time">발행일: ${formatUtcToKst(post.published_at, true)} KST</span>
           </div>
           <h1 class="blog-article-title">${escapeHtml(post.title)}</h1>
           <div class="blog-article-lead">

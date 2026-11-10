@@ -3,7 +3,12 @@ import { Env, getSessionUser } from "../../auth";
 import { renderHTML } from "../ui/templates";
 import { withEdgeCache, EDGE_CACHE_TTL_SECONDS, PUBLIC_HTML_CACHE_CONTROL } from "../ui/router";
 import { BlogPostRecord, ensureBlogTable, publishDailyBlogPost, getYesterdayKstDate } from "./service";
-import { renderBlogListPage, renderBlogPostPage, formatKoreanDate } from "./templates";
+import {
+  renderBlogListPage,
+  renderBlogPostPage,
+  buildBlogListJsonLd,
+  buildBlogPostJsonLd,
+} from "./templates";
 
 export const blogRouter = new Router();
 
@@ -60,6 +65,7 @@ blogRouter.get("/blog", async (request, env, ctx) => {
       description: pageDesc,
       canonicalPath,
       ogType: "website",
+      jsonLd: buildBlogListJsonLd(data.posts, page),
       hasFeedback: Boolean(user?.has_feedback),
     }),
     {
@@ -75,7 +81,7 @@ blogRouter.get("/blog", async (request, env, ctx) => {
 /**
  * GET /blog/:slug - Individual Blog Post
  */
-blogRouter.get(/^\/blog\/([a-zA-Z0-9_\-]+)$/, async (request, env, ctx, match) => {
+blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
   await ensureBlogTable(env.DB);
   const slug = match![1];
   const user = await getSessionUser(request, env);
@@ -156,6 +162,7 @@ blogRouter.get(/^\/blog\/([a-zA-Z0-9_\-]+)$/, async (request, env, ctx, match) =
       description: post.summary,
       canonicalPath,
       ogType: "article",
+      jsonLd: buildBlogPostJsonLd(post),
       hasFeedback: Boolean(user?.has_feedback),
     }),
     {

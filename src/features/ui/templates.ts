@@ -1531,7 +1531,7 @@ export function renderHTML(
         </a>
       </h1>
       <div class="header-right">
-        <a href="/blog" class="icon-btn" title="블로그 (일일 뉴스 브리핑)" style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
+        <a href="/blog" class="icon-btn" title="블로그 (일일 뉴스 브리핑)" aria-label="블로그 (일일 뉴스 브리핑)" style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
         </a>
         <button id="header-feedback-btn" class="icon-btn" title="피드백 보내기">
@@ -1844,7 +1844,7 @@ export function renderHTML(
       };
     </script>
     <footer>
-      <a href="/guidelines">가이드라인 (Guidelines)</a> | <a href="/legal">법적고지 (Legal)</a> | <a href="#" id="footer-feedback-btn">피드백 보내기</a> | <a href="mailto:hy3n4news@gmail.com">Contact</a>
+      <a href="/blog">일일 뉴스 브리핑 (Blog)</a> | <a href="/guidelines">가이드라인 (Guidelines)</a> | <a href="/legal">법적고지 (Legal)</a> | <a href="#" id="footer-feedback-btn">피드백 보내기</a> | <a href="mailto:hy3n4news@gmail.com">Contact</a>
     </footer>
   </div>
 </body>

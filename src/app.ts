@@ -5,6 +5,8 @@ import {
   fetchHotTopicsCached,
   fetchNewsCached,
   fetchSitemapTopicsCached,
+  withEdgeCache,
+  EDGE_CACHE_TTL_SECONDS,
   PUBLIC_HTML_CACHE_CONTROL,
 } from "./features/ui/router";
 import { rssRouter } from "./features/rss/router";
@@ -14,7 +16,7 @@ import { blogRouter } from "./features/blog/router";
 import { ensureBlogTable } from "./features/blog/service";
 import { getSessionUser } from "./auth";
 
-export const app = new Router();
+export const app = new Router({ trailingSlash: "never" });
 
 function escapeXml(str: string): string {
   return (str || "")
@@ -203,42 +205,61 @@ app.get("/llms-full.txt", async (_request, env, ctx) => {
   });
 });
 
+function toIsoUtcString(sqlOrIso?: string | null, fallback?: string): string {
+  if (!sqlOrIso) return fallback || new Date().toISOString();
+  const normalized = sqlOrIso.endsWith("Z")
+    ? sqlOrIso
+    : `${sqlOrIso.replace(" ", "T")}Z`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime())
+    ? fallback || new Date().toISOString()
+    : parsed.toISOString();
+}
+
 // SEO: Dynamic sitemap.xml (includes active topic cluster pages and blog posts, cached at Edge for 30m)
 app.get("/sitemap.xml", async (_request, env, ctx) => {
-  const topics = await fetchSitemapTopicsCached(env, ctx);
-  const nowIso = new Date().toISOString();
+  const [topics, blogPosts] = await Promise.all([
+    fetchSitemapTopicsCached(env, ctx),
+    withEdgeCache<Array<{ slug: string; published_at: string }>>(
+      "https://hy3n4.news/__cache/d1/sitemap-blogs/v2",
+      EDGE_CACHE_TTL_SECONDS,
+      ctx,
+      async () => {
+        try {
+          await ensureBlogTable(env.DB);
+          const { results } = await env.DB.prepare(
+            "SELECT slug, published_at FROM blog_posts ORDER BY published_at DESC LIMIT 200"
+          ).all<{ slug: string; published_at: string }>();
+          return results || [];
+        } catch {
+          return [];
+        }
+      }
+    ),
+  ]);
 
-  let blogPosts: Array<{ slug: string; published_at: string }> = [];
-  try {
-    await ensureBlogTable(env.DB);
-    const { results } = await env.DB.prepare(
-      "SELECT slug, published_at FROM blog_posts ORDER BY published_at DESC LIMIT 100"
-    ).all<{ slug: string; published_at: string }>();
-    blogPosts = results || [];
-  } catch {}
+  const nowIso = new Date().toISOString();
+  const latestTopicMod = topics && topics.length > 0 ? toIsoUtcString(topics[0].updated_at, nowIso) : nowIso;
+  const latestBlogMod = blogPosts && blogPosts.length > 0 ? toIsoUtcString(blogPosts[0].published_at, nowIso) : nowIso;
 
   const topicUrls = (topics ?? [])
     .map((t) => {
-      const lastMod = t.updated_at
-        ? new Date(t.updated_at.endsWith("Z") ? t.updated_at : `${t.updated_at.replace(" ", "T")}Z`).toISOString()
-        : nowIso;
+      const lastMod = toIsoUtcString(t.updated_at, latestTopicMod);
       return `  <url><loc>https://hy3n4.news/topic/${escapeXml(String(t.id))}</loc><lastmod>${escapeXml(lastMod)}</lastmod><changefreq>hourly</changefreq><priority>0.8</priority></url>`;
     })
     .join("\n");
 
-  const blogUrls = blogPosts
+  const blogUrls = (blogPosts ?? [])
     .map((p) => {
-      const lastMod = p.published_at
-        ? new Date(p.published_at.endsWith("Z") ? p.published_at : `${p.published_at.replace(" ", "T")}Z`).toISOString()
-        : nowIso;
-      return `  <url><loc>https://hy3n4.news/blog/${escapeXml(p.slug)}</loc><lastmod>${escapeXml(lastMod)}</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>`;
+      const lastMod = toIsoUtcString(p.published_at, latestBlogMod);
+      return `  <url><loc>https://hy3n4.news/blog/${escapeXml(p.slug)}</loc><lastmod>${escapeXml(lastMod)}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>`;
     })
     .join("\n");
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://hy3n4.news/</loc><lastmod>${escapeXml(nowIso)}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://hy3n4.news/blog</loc><lastmod>${escapeXml(nowIso)}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://hy3n4.news/</loc><lastmod>${escapeXml(latestTopicMod)}</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://hy3n4.news/blog</loc><lastmod>${escapeXml(latestBlogMod)}</lastmod><changefreq>daily</changefreq><priority>0.9</priority></url>
   <url><loc>https://hy3n4.news/search</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>
   <url><loc>https://hy3n4.news/llms.txt</loc><changefreq>hourly</changefreq><priority>0.6</priority></url>
   <url><loc>https://hy3n4.news/llms-full.txt</loc><changefreq>hourly</changefreq><priority>0.6</priority></url>
@@ -261,24 +282,11 @@ app.use(rssRouter);
 app.use(userRouter);
 app.use(aiRouter);
 
-/**
- * Override the default 404 handler to show our pretty 404 page.
- */
-const originalHandle = app.handle.bind(app);
-app.handle = async (request, env, ctx) => {
-  try {
-    const response = await originalHandle(request, env, ctx);
-    // If the original handler returned the generic "Not Found" response from Router.handle
-    if (response.status === 404 && (await response.clone().text()) === "Not Found") {
-      const user = await getSessionUser(request, env);
-      return new Response(renderNotFoundPage(user), {
-        status: 404,
-        headers: { "Content-Type": "text/html; charset=utf-8" }
-      });
-    }
-    return response;
-  } catch (e: any) {
-    console.error(`[ERROR] ${e.message}`);
-    return new Response(`Application Error: ${e.message}`, { status: 500 });
-  }
-};
+// Global 404 Not Found Handler
+app.notFound(async (request, env) => {
+  const user = await getSessionUser(request, env);
+  return new Response(renderNotFoundPage(user), {
+    status: 404,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+});

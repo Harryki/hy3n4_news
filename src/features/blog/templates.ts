@@ -280,8 +280,122 @@ export function renderBlogListPage(
   `;
 }
 
+export function buildBlogListJsonLd(posts: BlogPostRecord[], page: number = 1) {
+  const canonicalUrl = page > 1 ? `https://hy3n4.news/blog?page=${page}` : "https://hy3n4.news/blog";
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "하이에나뉴스 일일 이슈 브리핑 블로그",
+    "url": canonicalUrl,
+    "inLanguage": "ko-KR",
+    "description": "대한민국 주요 언론사 기사를 AI로 클러스터링하여 매일 가장 뜨거운 3대 핵심 이슈의 전개 과정과 언론사별 관점을 심층 분석합니다.",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "하이에나뉴스",
+      "url": "https://hy3n4.news/",
+    },
+    "mainEntity": {
+      "@type": "ItemList",
+      "numberOfItems": posts.length,
+      "itemListElement": posts.map((p, idx) => ({
+        "@type": "ListItem",
+        "position": idx + 1,
+        "url": `https://hy3n4.news/blog/${encodeURIComponent(p.slug)}`,
+        "name": p.title,
+      })),
+    },
+  };
+}
+
+export function buildBlogPostJsonLd(post: BlogPostRecord) {
+  const postUrl = `https://hy3n4.news/blog/${encodeURIComponent(post.slug)}`;
+  const isoPub = post.published_at.endsWith("Z")
+    ? post.published_at
+    : `${post.published_at.replace(" ", "T")}Z`;
+
+  let keywordsList: string[] = [];
+  try {
+    if (post.topics_data) {
+      const parsed = JSON.parse(post.topics_data);
+      if (Array.isArray(parsed)) {
+        for (const t of parsed) {
+          if (t?.keywords) {
+            keywordsList.push(
+              ...String(t.keywords)
+                .split(",")
+                .map((k: string) => k.trim())
+                .filter(Boolean)
+            );
+          }
+        }
+      }
+    }
+  } catch {}
+
+  const uniqueKeywords = Array.from(new Set(keywordsList));
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BlogPosting",
+        "@id": `${postUrl}#article`,
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": postUrl,
+        },
+        "url": postUrl,
+        "headline": post.title,
+        "description": post.summary,
+        "image": ["https://hy3n4.news/hyena.svg"],
+        "datePublished": isoPub,
+        "dateModified": isoPub,
+        ...(uniqueKeywords.length > 0 ? { "keywords": uniqueKeywords.join(", ") } : {}),
+        "author": {
+          "@type": "Organization",
+          "name": "하이에나뉴스 AI 편집팀",
+          "url": "https://hy3n4.news",
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "하이에나뉴스",
+          "url": "https://hy3n4.news",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://hy3n4.news/hyena.svg",
+          },
+        },
+        "inLanguage": "ko-KR",
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "홈",
+            "item": "https://hy3n4.news/",
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "블로그",
+            "item": "https://hy3n4.news/blog",
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": post.title,
+            "item": postUrl,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 /**
- * Renders an individual Blog Post page with JSON-LD Schema.
+ * Renders an individual Blog Post page.
  */
 export function renderBlogPostPage(
   post: BlogPostRecord,
@@ -317,41 +431,7 @@ export function renderBlogPostPage(
     `
     : "";
 
-  const postUrl = `https://hy3n4.news/blog/${encodeURIComponent(post.slug)}`;
-
-  // JSON-LD structured data for Google SEO
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BlogPosting",
-    "mainEntityOfPage": {
-      "@type": "WebPage",
-      "@id": postUrl,
-    },
-    "headline": post.title,
-    "description": post.summary,
-    "datePublished": post.published_at.endsWith("Z") ? post.published_at : `${post.published_at.replace(" ", "T")}Z`,
-    "dateModified": post.published_at.endsWith("Z") ? post.published_at : `${post.published_at.replace(" ", "T")}Z`,
-    "author": {
-      "@type": "Organization",
-      "name": "하이에나뉴스 AI 편집팀",
-      "url": "https://hy3n4.news",
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "하이에나뉴스",
-      "logo": {
-        "@type": "ImageObject",
-        "url": "https://hy3n4.news/hyena.svg",
-      },
-    },
-    "inLanguage": "ko-KR",
-  };
-
   return `
-    <script type="application/ld+json">
-      ${JSON.stringify(jsonLd)}
-    </script>
-
     <div class="blog-container">
       <nav class="blog-breadcrumb" aria-label="Breadcrumb">
         <a href="/">홈</a><span class="bc-sep" aria-hidden="true">/</span><a href="/blog">블로그</a><span class="bc-sep" aria-hidden="true">/</span><span>${formatKoreanDate(post.target_date)}</span>

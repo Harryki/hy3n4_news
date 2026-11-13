@@ -1,6 +1,7 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { getRelativeTime } from "../../core/utils";
+import { ensureBlogTable, stripBlogDatePrefix } from "../blog/service";
 import {
   renderHTML,
   renderNewsList,
@@ -437,7 +438,7 @@ export async function fetchHotTopicsCached(
   env: Env,
   ctx?: ExecutionContext
 ): Promise<TopicRow[]> {
-  const topicsCacheKey = `https://hy3n4.news/__cache/d1/hot-topics/v6`;
+  const topicsCacheKey = `https://hy3n4.news/__cache/d1/hot-topics/v7`;
 
   return withEdgeCache<TopicRow[]>(topicsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     const { results } = await env.DB.prepare(`
@@ -466,6 +467,7 @@ export async function fetchHotTopicsCached(
 
     for (const c of candidates) {
       if (selected.length >= 10) break;
+      c.title = (c.title || "").replace(/\s*(?:→|->)\s*/g, " · ");
       const kwSet = new Set(
         (c.keywords || "")
           .split(",")
@@ -526,17 +528,21 @@ export async function fetchLatestBriefingsCached(
   env: Env,
   ctx?: ExecutionContext
 ): Promise<Array<{ slug: string; title: string; summary: string; target_date: string; published_at: string }>> {
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/home-briefings/v1`;
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/home-briefings/v2`;
 
   return withEdgeCache(cacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     try {
+      await ensureBlogTable(env.DB);
       const { results } = await env.DB.prepare(`
         SELECT slug, title, summary, target_date, published_at
         FROM blog_posts
         ORDER BY published_at DESC, id DESC
         LIMIT 3;
       `).all<{ slug: string; title: string; summary: string; target_date: string; published_at: string }>();
-      return results ?? [];
+      return (results ?? []).map((r) => ({
+        ...r,
+        title: stripBlogDatePrefix(r.title),
+      }));
     } catch {
       return [];
     }

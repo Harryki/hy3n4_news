@@ -33,9 +33,35 @@ export interface BlogPostRecord {
 }
 
 /**
- * Ensures blog_posts table and indexes exist in D1.
+ * Strips leading date/slot/briefing prefixes from blog post titles.
+ * e.g. "11월 13일 저녁 브리핑: 중기부 개인정보 유출..." -> "중기부 개인정보 유출..."
+ *      "2026년 11월 13일 아침 뉴스: 젠슨 황 사퇴..." -> "젠슨 황 사퇴..."
+ *      "11/11 뉴스 브리핑: 젠슨 황 스캔들..." -> "젠슨 황 스캔들..."
+ */
+export function stripBlogDatePrefix(title: string): string {
+  return String(title || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(
+      /^(?:\[[^\]]+\]\s*)?(?:\d{4}년\s*)?\d{1,2}(?:월\s*\d{1,2}일|\/\d{1,2})\s*(?:아침|오후|저녁|일일|오늘의|주요)?\s*(?:뉴스\s*)?(?:브리핑|요약|정리|분석)?\s*[:\-–—]\s*/i,
+      ""
+    )
+    .replace(
+      /^(?:아침|오후|저녁|일일|오늘의)\s*(?:뉴스\s*)?(?:브리핑|요약|정리|분석)?\s*[:\-–—]\s*/i,
+      ""
+    )
+    .replace(/\s*(?:→|->)\s*/g, ", ")
+    .trim();
+}
+
+let blogTableInitialized = false;
+
+/**
+ * Ensures blog_posts table and indexes exist in D1, and normalizes legacy titles.
  */
 export async function ensureBlogTable(db: D1Database): Promise<void> {
+  if (blogTableInitialized) return;
+
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS blog_posts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +79,39 @@ export async function ensureBlogTable(db: D1Database): Promise<void> {
   await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC);
   `).run();
+
+  try {
+    const { results: legacyPosts } = await db
+      .prepare("SELECT id, title FROM blog_posts WHERE title LIKE '%:%' OR title LIKE '%→%' LIMIT 100")
+      .all<{ id: number; title: string }>();
+
+    if (legacyPosts && legacyPosts.length > 0) {
+      const stmts = [];
+      for (const row of legacyPosts) {
+        const cleaned = stripBlogDatePrefix(row.title);
+        if (cleaned && cleaned !== row.title) {
+          stmts.push(db.prepare("UPDATE blog_posts SET title = ? WHERE id = ?").bind(cleaned, row.id));
+        }
+      }
+      if (stmts.length > 0) {
+        await db.batch(stmts);
+      }
+    }
+
+    // Clean arrows from recent active topics as well
+    await db
+      .prepare(`
+        UPDATE topics
+        SET title = REPLACE(REPLACE(title, ' → ', ' · '), '→', '·')
+        WHERE updated_at >= datetime('now', '-3 days')
+          AND title LIKE '%→%'
+      `)
+      .run();
+  } catch (e) {
+    console.warn("[BLOG] Legacy title cleanup skipped:", e);
+  }
+
+  blogTableInitialized = true;
 }
 
 /**
@@ -438,15 +497,6 @@ ${topicPrompts}
   // Strip <think> tags if present in reasoning/deepseek models
   rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
-  const cleanBlogTitle = (t: string): string =>
-    t
-      .trim()
-      .replace(/^["']|["']$/g, "")
-      .replace(/^\d{4}년\s*\d{1,2}월\s*\d{1,2}일(?:\s*(?:아침|오후|저녁))?\s*(?:뉴스\s*)?(?:브리핑)?\s*[:\-–—]\s*/i, "")
-      .replace(/^(?:아침|오후|저녁)\s*(?:뉴스\s*)?브리핑\s*[:\-–—]\s*/i, "")
-      .replace(/\s*(?:→|->)\s*/g, ", ")
-      .trim();
-
   // 1. Try Tag-based parsing (most robust for long markdown)
   const titleMatch = rawText.match(/<<<TITLE>>>\s*([\s\S]*?)\s*(?:<<<SUMMARY>>>|<<<CONTENT>>>|$)/i);
   const summaryMatch = rawText.match(/<<<SUMMARY>>>\s*([\s\S]*?)\s*(?:<<<CONTENT>>>|$)/i);
@@ -454,7 +504,7 @@ ${topicPrompts}
 
   if (titleMatch && contentMatch && titleMatch[1].trim() && contentMatch[1].trim()) {
     return {
-      title: cleanBlogTitle(titleMatch[1]),
+      title: stripBlogDatePrefix(titleMatch[1]),
       summary: (summaryMatch ? summaryMatch[1].trim() : "").replace(/^["']|["']$/g, ""),
       content: contentMatch[1].trim(),
     };
@@ -470,7 +520,7 @@ ${topicPrompts}
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.title && parsed.content) {
         return {
-          title: cleanBlogTitle(String(parsed.title)),
+          title: stripBlogDatePrefix(String(parsed.title)),
           summary: String(parsed.summary || "").trim(),
           content: String(parsed.content).trim(),
         };

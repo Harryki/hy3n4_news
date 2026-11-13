@@ -2,7 +2,12 @@ import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { renderHTML } from "../ui/templates";
 import { withEdgeCache, EDGE_CACHE_TTL_SECONDS, PUBLIC_HTML_CACHE_CONTROL } from "../ui/router";
-import { BlogPostRecord, ensureBlogTable, publishDailyBlogPost, getYesterdayKstDate } from "./service";
+import {
+  BlogPostRecord,
+  ensureBlogTable,
+  publishDailyBlogPost,
+  stripBlogDatePrefix,
+} from "./service";
 import {
   renderBlogListPage,
   renderBlogPostPage,
@@ -26,7 +31,7 @@ blogRouter.get("/blog", async (request, env, ctx) => {
   const offset = (page - 1) * BLOG_PAGE_SIZE;
 
   const isRefresh = url.searchParams.has("refresh") || Boolean(user);
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v3/list?page=${page}`;
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v4/list?page=${page}`;
   
   const fetchFromDb = async () => {
     const { results } = await env.DB.prepare(`
@@ -36,7 +41,7 @@ blogRouter.get("/blog", async (request, env, ctx) => {
       LIMIT ? OFFSET ?
     `).bind(BLOG_PAGE_SIZE + 1, offset).all<BlogPostRecord>();
 
-    const rows = results || [];
+    const rows = (results || []).map((r) => ({ ...r, title: stripBlogDatePrefix(r.title) }));
     const hasMore = rows.length > BLOG_PAGE_SIZE;
     const posts = hasMore ? rows.slice(0, BLOG_PAGE_SIZE) : rows;
 
@@ -86,7 +91,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
   const slug = match![1];
   const user = await getSessionUser(request, env);
 
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v3/post/${encodeURIComponent(slug)}`;
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v4/post/${encodeURIComponent(slug)}`;
   const data = await withEdgeCache<{
     post: BlogPostRecord | null;
     prevPost: BlogPostRecord | null;
@@ -105,6 +110,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
       if (!post) {
         return { post: null, prevPost: null, nextPost: null };
       }
+      post.title = stripBlogDatePrefix(post.title);
 
       // Prev (older) post
       const prevPost = await env.DB.prepare(`
@@ -114,6 +120,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
         ORDER BY id DESC
         LIMIT 1
       `).bind(post.id).first<BlogPostRecord>();
+      if (prevPost) prevPost.title = stripBlogDatePrefix(prevPost.title);
 
       // Next (newer) post
       const nextPost = await env.DB.prepare(`
@@ -123,6 +130,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
         ORDER BY id ASC
         LIMIT 1
       `).bind(post.id).first<BlogPostRecord>();
+      if (nextPost) nextPost.title = stripBlogDatePrefix(nextPost.title);
 
       return { post, prevPost: prevPost || null, nextPost: nextPost || null };
     }

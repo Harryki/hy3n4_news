@@ -319,15 +319,6 @@ async function main() {
     LIMIT 3;`,
     bindParams
   );
-    GROUP BY t.updated_at, t.id
-    HAVING article_count >= 2
-    ORDER BY
-      (CASE WHEN t.milestones IS NOT NULL AND length(t.milestones) > 20 THEN 1 ELSE 0 END) DESC,
-      article_count DESC,
-      source_count DESC
-    LIMIT 3;`,
-    [startUtc, startUtc, endUtc, startUtc, endUtc]
-  );
 
   if (!topicRows || topicRows.length === 0) {
     console.log(`⚠️  ${targetDate}에 활동한 뉴스 토픽을 찾지 못했습니다.`);
@@ -420,15 +411,18 @@ ${topicPrompts}
 
 [작성 가이드라인]
 1. **포스트 제목 (title)**:
-   - 검색 유입에 최적화되고 클릭하고 싶은 형태 (예: "${dateFormatted} ${slotInfo.ko} 뉴스 브리핑: [토픽1 핵심]부터 [토픽2·3 요약]까지")
-   - 45자 이내 한국어.
+   - **절대 제목에 날짜("${dateFormatted}")나 "아침/오후/저녁 브리핑:" 같은 접두어를 넣지 마세요.**
+   - 첫 글자부터 독자들이 실제로 구글에 검색할 만한 **3대 토픽의 핵심 고유명사(인물·기업·기관·정책)와 구체적 사건 키워드**가 바로 나오도록 작성하세요.
+   - 예: "제네시스 GV90 가격 공개, 은마 재초환 부담금 논란과 엔비디아 사태 핵심 분석"
+   - 42자 이내 한국어, 특수기호 화살표(→) 사용 금지.
 2. **요약 (summary)**:
-   - 검색엔진 메타 디스크립션(meta description) 및 본문 첫머리에 들어갈 2~3문장 요약 (120~160자 내외).
+   - 검색엔진 메타 디스크립션(meta description) 및 본문 첫머리에 들어갈 2~3문장 요약 (120~160자 내외, 핵심 고유명사 키워드 포함).
 3. **본문 (content)**:
-   - GitHub Flavored Markdown 형식으로 작성.
+   - GitHub Flavored Markdown 형식으로 작성 (섹션 구분선 \`---\`는 사용하지 마세요).
    - 구성:
      1) **서론**: ${dateFormatted} ${slotInfo.ko} 대한민국 이슈의 전반적인 맥락과 왜 이 3가지 이슈가 중요했는지 브리핑.
      2) **토픽별 심층 분석 (3개 각각 H2 제목 포함)**:
+        - H2 제목도 검색 키워드가 명확히 드러나는 구체적 헤드라인으로 작성
         - 사건 개요 및 배경
         - 시간 순서에 따른 전개 흐름 (마일스톤 활용)
         - 각 언론사들의 주요 보도 각도와 시각 차이
@@ -440,7 +434,7 @@ ${topicPrompts}
 반드시 다음 태그 구분자를 사용하여 답변하세요 (JSON 형식은 사용하지 마세요):
 
 <<<TITLE>>>
-블로그 포스트 제목 (45자 이내 한국어)
+날짜/브리핑 접두어 없이 핵심 고유명사와 사건 키워드로 시작하는 제목 (42자 이내 한국어)
 
 <<<SUMMARY>>>
 검색엔진 메타 디스크립션 및 요약 (120~160자 내외 한국어)
@@ -466,6 +460,15 @@ ${topicPrompts}
 
   rawText = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
+  const cleanBlogTitle = (t) =>
+    String(t || "")
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .replace(/^\d{4}년\s*\d{1,2}월\s*\d{1,2}일(?:\s*(?:아침|오후|저녁))?\s*(?:뉴스\s*)?(?:브리핑)?\s*[:\-–—]\s*/i, "")
+      .replace(/^(?:아침|오후|저녁)\s*(?:뉴스\s*)?브리핑\s*[:\-–—]\s*/i, "")
+      .replace(/\s*(?:→|->)\s*/g, ", ")
+      .trim();
+
   // 1. Try Tag-based parsing (most robust for long markdown)
   const titleMatch = rawText.match(/<<<TITLE>>>\s*([\s\S]*?)\s*(?:<<<SUMMARY>>>|<<<CONTENT>>>|$)/i);
   const summaryMatch = rawText.match(/<<<SUMMARY>>>\s*([\s\S]*?)\s*(?:<<<CONTENT>>>|$)/i);
@@ -474,7 +477,7 @@ ${topicPrompts}
   let parsed = null;
   if (titleMatch && contentMatch && titleMatch[1].trim() && contentMatch[1].trim()) {
     parsed = {
-      title: titleMatch[1].trim().replace(/^["']|["']$/g, ""),
+      title: cleanBlogTitle(titleMatch[1]),
       summary: (summaryMatch ? summaryMatch[1].trim() : "").replace(/^["']|["']$/g, ""),
       content: contentMatch[1].trim(),
     };
@@ -489,7 +492,7 @@ ${topicPrompts}
         const jsonParsed = JSON.parse(jsonMatch[0]);
         if (jsonParsed.title && jsonParsed.content) {
           parsed = {
-            title: String(jsonParsed.title).trim(),
+            title: cleanBlogTitle(jsonParsed.title),
             summary: String(jsonParsed.summary || "").trim(),
             content: String(jsonParsed.content).trim(),
           };

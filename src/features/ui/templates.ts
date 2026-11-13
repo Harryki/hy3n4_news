@@ -343,6 +343,110 @@ export const CSS_STYLES = `
       font-weight: normal;
     }
 
+    .hyena-briefing {
+      padding: 12px 0 14px;
+      border-top: 1px dashed rgba(87, 53, 43, 0.2);
+      border-bottom: 1px solid rgba(87, 53, 43, 0.12);
+      background: var(--bg);
+    }
+
+    .hyena-briefing-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .hyena-briefing-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hyena-briefing-sub {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--secondary);
+      opacity: 0.85;
+    }
+
+    .hyena-briefing-more {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .hyena-briefing-more:hover {
+      text-decoration: underline;
+    }
+
+    .hyena-briefing-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 8px;
+    }
+
+    .hyena-briefing-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      background: rgba(87, 53, 43, 0.045);
+      border: 1px solid rgba(87, 53, 43, 0.14);
+      text-decoration: none;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      min-width: 0;
+    }
+
+    .hyena-briefing-item:hover {
+      background: rgba(158, 91, 16, 0.12);
+      border-color: var(--accent);
+    }
+
+    .hyena-briefing-badge {
+      flex-shrink: 0;
+      background: var(--border);
+      color: var(--bg);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .hyena-briefing-item-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 640px) {
+      .hyena-briefing-sub {
+        display: none;
+      }
+
+      .hyena-briefing-list {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .hyena-briefing-item-title {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+      }
+    }
+
     .news-column {
       flex: 1 1 calc(50% - 10px);
       min-width: 300px;
@@ -1931,6 +2035,49 @@ export function renderTopics(topics: any[]) {
 
   html += `</div></div>`;
   return html;
+}
+
+function formatShortBriefingBadge(targetDate: string): string {
+  const parts = (targetDate || "").split("-");
+  if (parts.length < 3) return targetDate || "브리핑";
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  const slot = parts[3];
+  const slotKo =
+    slot === "morning" ? " 아침" : slot === "afternoon" ? " 오후" : slot === "evening" ? " 저녁" : "";
+  return `${m}월 ${d}일${slotKo}`;
+}
+
+export function renderHyenaBriefing(
+  briefings: Array<{ slug: string; title: string; summary?: string; target_date: string; published_at?: string }>
+): string {
+  if (!briefings || briefings.length === 0) return "";
+
+  const itemsHtml = briefings
+    .slice(0, 3)
+    .map(
+      (b) => `
+      <a href="/blog/${escapeHtml(b.slug)}" class="hyena-briefing-item" title="${escapeHtml(b.title)}">
+        <span class="hyena-briefing-badge">${escapeHtml(formatShortBriefingBadge(b.target_date))}</span>
+        <span class="hyena-briefing-item-title">${escapeHtml(b.title)}</span>
+      </a>`
+    )
+    .join("");
+
+  return `
+    <section class="hyena-briefing" aria-label="하이에나 브리핑">
+      <div class="hyena-briefing-header">
+        <div class="hyena-briefing-title">
+          <span>하이에나 브리핑</span>
+          <span class="hyena-briefing-sub">매일 3회 핵심 이슈 심층 정리</span>
+        </div>
+        <a href="/blog" class="hyena-briefing-more">전체 브리핑 →</a>
+      </div>
+      <div class="hyena-briefing-list">
+        ${itemsHtml}
+      </div>
+    </section>
+  `;
 }
 
 function escapeHtml(str: string): string {

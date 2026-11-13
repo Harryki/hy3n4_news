@@ -273,14 +273,19 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
                 },
                 {
                   role: "user",
-                  content: `다음 시간순 뉴스 기사들을 읽고 토픽의 대표 제목(28자 이내 한국어), 핵심 키워드 3개, 그리고 사건의 시간순 핵심 마일스톤(1~3개, 각 45자 이내, 시간 표기 제외)을 작성하세요.
+                  content: `다음 시간순 뉴스 기사들을 읽고 토픽의 대표 제목(26자 이내 한국어), 핵심 키워드 3개, 그리고 사건의 시간순 핵심 마일스톤(1~3개, 각 45자 이내, 시간 표기 제외)을 작성하세요.
+
+[제목 작성 규칙]
+- 화살표(→, ->), 콜론(:), 따옴표 없이 **[핵심 주체/고유명사] + [구체적 사건·핵심 쟁점]**이 한눈에 읽히는 자연스러운 단일 뉴스 헤드라인(명사형 종결, 26자 이내)으로 작성하세요.
+- 나쁜 예: "은마아파트 재초환 → 조합원 반발 및 사업 지연 우려"
+- 좋은 예: "은마아파트 재초환 부담금 통보와 조합원 반발 확산"
 
 기사 목록:
 ${articleLines}
 
 출력 JSON 형식:
 {
-  "title": "사건 핵심 제목 (진행 흐름이 있다면 '초기 사건 → 현재 상황' 형태, 28자 이내)",
+  "title": "핵심 주체와 구체적 사건이 드러나는 헤드라인 (화살표 금지, 26자 이내)",
   "keywords": "키워드1, 키워드2, 키워드3",
   "milestones": ["핵심 사실 요약 (시간 제외 45자 이내)"]
 }`,
@@ -298,6 +303,10 @@ ${articleLines}
             const parsed = extractJsonObject(rawText);
 
             if (parsed?.title && parsed?.keywords) {
+              const cleanedTitle = String(parsed.title)
+                .replace(/\s*(?:→|->|▶|⇒)\s*/g, "·")
+                .replace(/^["']|["']$/g, "")
+                .trim();
               const keywordString = Array.isArray(parsed.keywords)
                 ? parsed.keywords.join(", ")
                 : String(parsed.keywords);
@@ -305,7 +314,7 @@ ${articleLines}
                 ? parsed.milestones
                 : parsed.first_milestone
                 ? [parsed.first_milestone]
-                : [parsed.title];
+                : [cleanedTitle];
 
               const latestTime = formatKstTime(
                 articles[articles.length - 1].published_at || articles[articles.length - 1].created_at
@@ -328,7 +337,7 @@ ${articleLines}
                   check_count: 1,
                   append_count: 1,
                   skip_count: 0,
-                  title_history: [parsed.title],
+                  title_history: [cleanedTitle],
                 },
               };
 
@@ -336,7 +345,7 @@ ${articleLines}
                 "UPDATE topics SET title = ?, keywords = ?, milestones = ?, last_summarized_count = ? WHERE id = ?"
               )
                 .bind(
-                  parsed.title,
+                  cleanedTitle,
                   keywordString,
                   JSON.stringify(milestoneData),
                   articles.length,
@@ -345,7 +354,7 @@ ${articleLines}
                 .run();
 
               // Evolve topic vector in Vectorize
-              const evolvedText = `${parsed.title} ${keywordString} ${items
+              const evolvedText = `${cleanedTitle} ${keywordString} ${items
                 .map((m) => m.text)
                 .join(" ")}`.substring(0, 1000);
               const embRes = await env.AI.run(env.EMBEDDING_MODEL, { text: [evolvedText] });
@@ -359,7 +368,7 @@ ${articleLines}
               }
 
               console.log(
-                `[QUEUE] Topic ${topic.id} initialized (${articles.length} articles): ${parsed.title}`
+                `[QUEUE] Topic ${topic.id} initialized (${articles.length} articles): ${cleanedTitle}`
               );
             }
           } else {
@@ -409,7 +418,7 @@ ${newArticleText}
 2. 기존 마일스톤 이후에 **새로운 사실, 후속 조치, 공식 입장/반박, 구체적 수치/피해 규모 변화, 수사/정책 진전** 등 사건의 의미 있는 전개가 있다면:
    - "has_progression": true
    - "new_milestones": 새로 진전된 핵심 사실만 1~2개 문장(각 45자 이내, 날짜/시간 표기 제외)으로 배열에 작성
-   - "updated_title": 사건의 처음과 최신 진행 상황이 한눈에 보이도록 제목 업데이트 (32자 이내, 예: "초기 핵심 사건 → 최신 진행/조치 상황")
+   - "updated_title": **절대 화살표(→, ->)를 쓰지 말고**, 핵심 주체(고유명사)와 가장 최신 국면이 자연스럽게 읽히는 하나의 단일 뉴스 헤드라인으로 재작성 (28자 이내, 예: "젠슨 황 엔비디아 사임 파장과 차기 CEO 후계 구도")
    - "keywords": 최신 흐름을 반영한 키워드 3개 (쉼표 구분)
 
 출력 JSON 형식:
@@ -456,7 +465,11 @@ ${newArticleText}
               );
             } else {
               existingData.meta.append_count = (existingData.meta.append_count || 1) + 1;
-              const updatedTitle = parsed.updated_title || topic.title;
+              const rawUpdatedTitle = parsed.updated_title || topic.title;
+              const updatedTitle = String(rawUpdatedTitle)
+                .replace(/\s*(?:→|->|▶|⇒)\s*/g, "·")
+                .replace(/^["']|["']$/g, "")
+                .trim();
               const updatedKeywords = parsed.keywords
                 ? Array.isArray(parsed.keywords)
                   ? parsed.keywords.join(", ")

@@ -1,7 +1,18 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { getRelativeTime } from "../../core/utils";
-import { renderHTML, renderNewsList, renderTopics, renderWideNewsList, renderSearchResults, renderPagination, renderTopicTimeline, renderFilters, SeoOptions } from "./templates";
+import {
+  renderHTML,
+  renderNewsList,
+  renderTopics,
+  renderHyenaBriefing,
+  renderWideNewsList,
+  renderSearchResults,
+  renderPagination,
+  renderTopicTimeline,
+  renderFilters,
+  SeoOptions,
+} from "./templates";
 
 export const uiRouter = new Router();
 
@@ -102,7 +113,8 @@ export function renderPage(
   updatedAt: string | null = null,
   topicKeywords: string | null = null,
   topicMilestones: string | null = null,
-  relatedTopics: RelatedTopicNode[] = []
+  relatedTopics: RelatedTopicNode[] = [],
+  latestBriefings: Array<{ slug: string; title: string; summary?: string; target_date: string; published_at?: string }> = []
 ): string {
   page = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   let content = "";
@@ -186,6 +198,10 @@ export function renderPage(
 
   if (hotTopics && hotTopics.length > 0) {
     content += renderTopics(hotTopics);
+  }
+
+  if (latestBriefings && latestBriefings.length > 0) {
+    content += renderHyenaBriefing(latestBriefings);
   }
 
   content += renderFilters(currentLimit, currentTime);
@@ -506,6 +522,27 @@ export async function fetchSitemapTopicsCached(
   );
 }
 
+export async function fetchLatestBriefingsCached(
+  env: Env,
+  ctx?: ExecutionContext
+): Promise<Array<{ slug: string; title: string; summary: string; target_date: string; published_at: string }>> {
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/home-briefings/v1`;
+
+  return withEdgeCache(cacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
+    try {
+      const { results } = await env.DB.prepare(`
+        SELECT slug, title, summary, target_date, published_at
+        FROM blog_posts
+        ORDER BY published_at DESC, id DESC
+        LIMIT 3;
+      `).all<{ slug: string; title: string; summary: string; target_date: string; published_at: string }>();
+      return results ?? [];
+    } catch {
+      return [];
+    }
+  });
+}
+
 // --- Routes ---
 
 uiRouter.get("/api/trends", async (_request, env, ctx) => {
@@ -690,9 +727,10 @@ uiRouter.get("/", async (request, env, ctx) => {
   const rawTime = parseInt(queryTime || "24", 10);
   const timeHours = Number.isFinite(rawTime) && rawTime > 0 ? Math.min(Math.floor(rawTime), 168) : 24;
 
-  const [news, hotTopics] = await Promise.all([
+  const [news, hotTopics, latestBriefings] = await Promise.all([
     fetchNewsCached(env, ctx, timeHours, limit, page),
     fetchHotTopicsCached(env, ctx),
+    fetchLatestBriefingsCached(env, ctx),
   ]);
 
   const ranked = [...(news ?? [])].sort((a, b) => {
@@ -701,7 +739,21 @@ uiRouter.get("/", async (request, env, ctx) => {
     return dateB - dateA;
   });
 
-  const html = renderPage(ranked, user, "", limit, timeHours, hotTopics ?? [], page);
+  const html = renderPage(
+    ranked,
+    user,
+    "",
+    limit,
+    timeHours,
+    hotTopics ?? [],
+    page,
+    null,
+    null,
+    null,
+    null,
+    [],
+    latestBriefings ?? []
+  );
 
   const response = new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8" },

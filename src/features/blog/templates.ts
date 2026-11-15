@@ -205,7 +205,8 @@ export function formatUtcToKst(utcStr: string, includeTime: boolean = true): str
 export function renderBlogListPage(
   posts: BlogPostRecord[],
   page: number = 1,
-  hasMore: boolean = false
+  hasMore: boolean = false,
+  sort: "latest" | "views" = "latest"
 ): string {
   const postCards = posts.length > 0
     ? posts.map((post) => {
@@ -222,17 +223,19 @@ export function renderBlogListPage(
         `).join("");
 
         const views = post.view_count || 0;
-        const viewBadge = views > 0 ? `<span class="hot-badge" title="조회수 ${views}회">조회 ${views}</span>` : "";
+        const viewBadge =
+          views >= 1
+            ? `<span class="hot-badge" title="조회수 ${views}회">조회 ${views}</span>`
+            : `<span class="blog-view-badge" title="조회수 0회">조회 0</span>`;
 
         return `
           <article class="blog-card">
             <div class="blog-card-meta">
               <span class="blog-date-badge">${formatKoreanDate(post.target_date)}</span>
               <span class="blog-meta-time">발행 ${formatUtcToKst(post.published_at, true)} KST</span>
-              ${viewBadge}
             </div>
             <h2 class="blog-card-title">
-              <a href="/blog/${escapeHtml(post.slug)}">${escapeHtml(post.title)}</a>
+              <a href="/blog/${escapeHtml(post.slug)}">${escapeHtml(post.title)}</a>${viewBadge}
             </h2>
             <p class="blog-card-summary">${escapeHtml(post.summary)}</p>
             ${topicBadges ? `<div class="blog-card-topics">${topicBadges}</div>` : ""}
@@ -253,8 +256,16 @@ export function renderBlogListPage(
       </div>
     `;
 
-  const prevLink = page > 1 ? `/blog${page === 2 ? "" : `?page=${page - 1}`}` : null;
-  const nextLink = hasMore ? `/blog?page=${page + 1}` : null;
+  const sortQuery = sort === "views" ? "sort=views" : "";
+  const buildPageHref = (targetPage: number) => {
+    const params: string[] = [];
+    if (sortQuery) params.push(sortQuery);
+    if (targetPage > 1) params.push(`page=${targetPage}`);
+    return params.length > 0 ? `/blog?${params.join("&")}` : "/blog";
+  };
+
+  const prevLink = page > 1 ? buildPageHref(page - 1) : null;
+  const nextLink = hasMore ? buildPageHref(page + 1) : null;
 
   const paginationHtml = (prevLink || nextLink)
     ? `
@@ -269,7 +280,13 @@ export function renderBlogListPage(
   return `
     <div class="blog-container">
       <header class="blog-index-header">
-        <h1 class="blog-index-title">하이에나뉴스 일일 이슈 브리핑</h1>
+        <div class="blog-index-header-top">
+          <h1 class="blog-index-title">하이에나뉴스 일일 이슈 브리핑</h1>
+          <div class="blog-sort-tabs" role="tablist" aria-label="블로그 정렬">
+            <a href="/blog" class="blog-sort-tab ${sort === "latest" ? "active" : ""}">최신순</a>
+            <a href="/blog?sort=views" class="blog-sort-tab ${sort === "views" ? "active" : ""}">조회순</a>
+          </div>
+        </div>
         <p class="blog-index-desc">
           대한민국 주요 언론사들의 기사를 AI로 클러스터링하여, 매일 가장 뜨거웠던 3대 핵심 토픽의 전개 과정과 언론사별 시각을 심층 정리합니다.
         </p>
@@ -446,7 +463,7 @@ export function renderBlogPostPage(
           <div class="blog-article-meta">
             <span class="blog-date-badge">${formatKoreanDate(post.target_date)} 브리핑</span>
             <span class="blog-meta-time">발행일: ${formatUtcToKst(post.published_at, true)} KST</span>
-            ${(post.view_count || 0) > 0 ? `<span class="hot-badge" title="조회수 ${post.view_count}회">조회 ${post.view_count}</span>` : ""}
+            <span class="${(post.view_count || 0) >= 1 ? "hot-badge" : "blog-view-badge"}" title="조회수 ${post.view_count || 0}회">조회 ${post.view_count || 0}</span>
           </div>
           <h1 class="blog-article-title">${escapeHtml(post.title)}</h1>
           <div class="blog-article-lead">

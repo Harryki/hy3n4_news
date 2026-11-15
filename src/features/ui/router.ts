@@ -524,13 +524,13 @@ export async function fetchSitemapTopicsCached(
   );
 }
 
+export const HOME_BRIEFINGS_CACHE_KEY = `https://hy3n4.news/__cache/d1/blog/home-briefings/v4`;
+
 export async function fetchLatestBriefingsCached(
   env: Env,
   ctx?: ExecutionContext
 ): Promise<Array<{ slug: string; title: string; summary: string; target_date: string; view_count: number; published_at: string }>> {
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/home-briefings/v3`;
-
-  return withEdgeCache(cacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
+  return withEdgeCache(HOME_BRIEFINGS_CACHE_KEY, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     try {
       await ensureBlogTable(env.DB);
       const { results } = await env.DB.prepare(`

@@ -1,7 +1,7 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
 import { renderHTML } from "../ui/templates";
-import { withEdgeCache, EDGE_CACHE_TTL_SECONDS, PUBLIC_HTML_CACHE_CONTROL } from "../ui/router";
+import { HOME_BRIEFINGS_CACHE_KEY } from "../ui/router";
 import {
   BlogPostRecord,
   ensureBlogTable,
@@ -22,42 +22,32 @@ const BLOG_PAGE_SIZE = 10;
 /**
  * GET /blog - Blog Post List
  */
-blogRouter.get("/blog", async (request, env, ctx) => {
+blogRouter.get("/blog", async (request, env) => {
   await ensureBlogTable(env.DB);
   const user = await getSessionUser(request, env);
   const url = new URL(request.url);
   const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
+  const sort: "latest" | "views" = url.searchParams.get("sort") === "views" ? "views" : "latest";
   const offset = (page - 1) * BLOG_PAGE_SIZE;
 
-  const isRefresh = url.searchParams.has("refresh") || Boolean(user);
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v5/list?page=${page}`;
-  
-  const fetchFromDb = async () => {
-    const { results } = await env.DB.prepare(`
-      SELECT id, slug, title, summary, content, topics_data, target_date, COALESCE(view_count, 0) as view_count, published_at, created_at
-      FROM blog_posts
-      ORDER BY published_at DESC, id DESC
-      LIMIT ? OFFSET ?
-    `).bind(BLOG_PAGE_SIZE + 1, offset).all<BlogPostRecord>();
+  const orderBy =
+    sort === "views"
+      ? "COALESCE(view_count, 0) DESC, published_at DESC, id DESC"
+      : "published_at DESC, id DESC";
 
-    const rows = (results || []).map((r) => ({ ...r, title: stripBlogDatePrefix(r.title) }));
-    const hasMore = rows.length > BLOG_PAGE_SIZE;
-    const posts = hasMore ? rows.slice(0, BLOG_PAGE_SIZE) : rows;
+  const { results } = await env.DB.prepare(`
+    SELECT id, slug, title, summary, content, topics_data, target_date, COALESCE(view_count, 0) as view_count, published_at, created_at
+    FROM blog_posts
+    ORDER BY ${orderBy}
+    LIMIT ? OFFSET ?
+  `).bind(BLOG_PAGE_SIZE + 1, offset).all<BlogPostRecord>();
 
-    return { posts, hasMore };
-  };
+  const rows = (results || []).map((r) => ({ ...r, title: stripBlogDatePrefix(r.title) }));
+  const hasMore = rows.length > BLOG_PAGE_SIZE;
+  const posts = hasMore ? rows.slice(0, BLOG_PAGE_SIZE) : rows;
 
-  const data = isRefresh
-    ? await fetchFromDb()
-    : await withEdgeCache<{ posts: BlogPostRecord[]; hasMore: boolean }>(
-        cacheKey,
-        EDGE_CACHE_TTL_SECONDS,
-        ctx,
-        fetchFromDb
-      );
-
-  const content = renderBlogListPage(data.posts, page, data.hasMore);
+  const content = renderBlogListPage(posts, page, hasMore, sort);
   const pageTitle = page > 1
     ? `하이에나뉴스 블로그 (${page}페이지) | 일일 뉴스 토픽 심층 브리핑`
     : `하이에나뉴스 블로그 | 대한민국 3대 뉴스 토픽 일일 심층 브리핑`;
@@ -70,13 +60,13 @@ blogRouter.get("/blog", async (request, env, ctx) => {
       description: pageDesc,
       canonicalPath,
       ogType: "website",
-      jsonLd: buildBlogListJsonLd(data.posts, page),
+      jsonLd: buildBlogListJsonLd(posts, page),
       hasFeedback: Boolean(user?.has_feedback),
     }),
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": isRefresh ? "private, no-cache" : PUBLIC_HTML_CACHE_CONTROL,
+        "Cache-Control": "no-cache",
         "Vary": "Cookie",
       },
     }
@@ -91,52 +81,13 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
   const slug = match![1];
   const user = await getSessionUser(request, env);
 
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v5/post/${encodeURIComponent(slug)}`;
-  const data = await withEdgeCache<{
-    post: BlogPostRecord | null;
-    prevPost: BlogPostRecord | null;
-    nextPost: BlogPostRecord | null;
-  }>(
-    cacheKey,
-    EDGE_CACHE_TTL_SECONDS,
-    ctx,
-    async () => {
-      const post = await env.DB.prepare(`
-        SELECT id, slug, title, summary, content, topics_data, target_date, COALESCE(view_count, 0) as view_count, published_at, created_at
-        FROM blog_posts
-        WHERE slug = ?
-      `).bind(slug).first<BlogPostRecord>();
+  const post = await env.DB.prepare(`
+    SELECT id, slug, title, summary, content, topics_data, target_date, COALESCE(view_count, 0) as view_count, published_at, created_at
+    FROM blog_posts
+    WHERE slug = ?
+  `).bind(slug).first<BlogPostRecord>();
 
-      if (!post) {
-        return { post: null, prevPost: null, nextPost: null };
-      }
-      post.title = stripBlogDatePrefix(post.title);
-
-      // Prev (older) post
-      const prevPost = await env.DB.prepare(`
-        SELECT id, slug, title, target_date
-        FROM blog_posts
-        WHERE id < ?
-        ORDER BY id DESC
-        LIMIT 1
-      `).bind(post.id).first<BlogPostRecord>();
-      if (prevPost) prevPost.title = stripBlogDatePrefix(prevPost.title);
-
-      // Next (newer) post
-      const nextPost = await env.DB.prepare(`
-        SELECT id, slug, title, target_date
-        FROM blog_posts
-        WHERE id > ?
-        ORDER BY id ASC
-        LIMIT 1
-      `).bind(post.id).first<BlogPostRecord>();
-      if (nextPost) nextPost.title = stripBlogDatePrefix(nextPost.title);
-
-      return { post, prevPost: prevPost || null, nextPost: nextPost || null };
-    }
-  );
-
-  if (!data.post) {
+  if (!post) {
     return new Response(
       renderHTML(
         `<div class="empty-state" style="padding: 60px 20px; text-align: center;">
@@ -159,18 +110,44 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
     );
   }
 
-  const post = data.post;
+  post.title = stripBlogDatePrefix(post.title);
+
+  const [prevPost, nextPost] = await Promise.all([
+    env.DB.prepare(`
+      SELECT id, slug, title, target_date
+      FROM blog_posts
+      WHERE id < ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).bind(post.id).first<BlogPostRecord>(),
+    env.DB.prepare(`
+      SELECT id, slug, title, target_date
+      FROM blog_posts
+      WHERE id > ?
+      ORDER BY id ASC
+      LIMIT 1
+    `).bind(post.id).first<BlogPostRecord>(),
+  ]);
+
+  if (prevPost) prevPost.title = stripBlogDatePrefix(prevPost.title);
+  if (nextPost) nextPost.title = stripBlogDatePrefix(nextPost.title);
+
   const ua = request.headers.get("user-agent") || "";
   if (request.method === "GET" && !/bot|crawl|spider|slurp|facebookexternalhit|mediapartners/i.test(ua)) {
     post.view_count = (post.view_count || 0) + 1;
     ctx.waitUntil(
-      env.DB.prepare("UPDATE blog_posts SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?")
-        .bind(post.id)
-        .run()
-        .catch(() => {})
+      (async () => {
+        try {
+          await env.DB.prepare("UPDATE blog_posts SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?")
+            .bind(post.id)
+            .run();
+          await caches.default.delete(new Request(HOME_BRIEFINGS_CACHE_KEY));
+        } catch {}
+      })()
     );
   }
-  const content = renderBlogPostPage(post, data.prevPost, data.nextPost);
+
+  const content = renderBlogPostPage(post, prevPost || null, nextPost || null);
   const canonicalPath = `/blog/${post.slug}`;
   const seoTitle = `${post.title} | 하이에나뉴스 블로그`;
 
@@ -186,7 +163,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": PUBLIC_HTML_CACHE_CONTROL,
+        "Cache-Control": "no-cache",
       },
     }
   );

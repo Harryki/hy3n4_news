@@ -985,6 +985,15 @@ export const CSS_STYLES = `
       margin-bottom: 4px;
     }
 
+    .blog-index-header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
     .blog-index-title {
       font-size: 26px;
       font-weight: 850;
@@ -992,7 +1001,49 @@ export const CSS_STYLES = `
       line-height: 1.3;
       letter-spacing: -0.02em;
       text-wrap: balance;
-      margin-bottom: 8px;
+      margin-bottom: 0;
+    }
+
+    .blog-sort-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .blog-sort-tab {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 5px;
+      border: 1px solid rgba(87, 53, 43, 0.25);
+      color: var(--secondary);
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .blog-sort-tab:hover {
+      border-color: var(--border);
+      color: var(--border);
+    }
+
+    .blog-sort-tab.active {
+      background: var(--border);
+      border-color: var(--border);
+      color: var(--bg);
+    }
+
+    .blog-view-badge {
+      display: inline-block;
+      background: rgba(87, 53, 43, 0.12);
+      color: var(--secondary);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
 
     .blog-index-desc {

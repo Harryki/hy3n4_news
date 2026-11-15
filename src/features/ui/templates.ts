@@ -514,15 +514,17 @@ export const CSS_STYLES = `
 
     .hot-badge {
       display: inline-block;
-      font-size: 10px;
+      font-size: 10.5px;
       font-weight: 800;
       line-height: 1;
-      padding: 2px 5px;
+      padding: 2px 6px;
       border-radius: 4px;
       background: rgba(158, 91, 16, 0.15);
       color: var(--accent);
       margin-left: 6px;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.01em;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
       vertical-align: middle;
       flex-shrink: 0;
     }
@@ -1975,10 +1977,8 @@ export function renderNewsList(sourceName: string, news: any[]) {
     let fireHtml = '';
     let titleWeight = viewCount >= 1 ? '600' : 'normal';
 
-    if (viewCount >= 2) {
-      fireHtml = '<span class="hot-badge" title="인기 기사">HOT 2</span>';
-    } else if (viewCount === 1) {
-      fireHtml = '<span class="hot-badge" title="인기 기사">HOT</span>';
+    if (viewCount >= 1) {
+      fireHtml = `<span class="hot-badge" title="조회수 ${viewCount}회">조회 ${viewCount}</span>`;
     }
 
     html += `
@@ -2049,19 +2049,21 @@ function formatShortBriefingBadge(targetDate: string): string {
 }
 
 export function renderHyenaBriefing(
-  briefings: Array<{ slug: string; title: string; summary?: string; target_date: string; published_at?: string }>
+  briefings: Array<{ slug: string; title: string; summary?: string; target_date: string; view_count?: number; published_at?: string }>
 ): string {
   if (!briefings || briefings.length === 0) return "";
 
   const itemsHtml = briefings
     .slice(0, 3)
-    .map(
-      (b) => `
+    .map((b) => {
+      const vc = b.view_count || 0;
+      const viewHtml = vc >= 1 ? `<span class="hot-badge" title="조회수 ${vc}회">조회 ${vc}</span>` : "";
+      return `
       <a href="/blog/${escapeHtml(b.slug)}" class="hyena-briefing-item" title="${escapeHtml(b.title)}">
         <span class="hyena-briefing-badge">${escapeHtml(formatShortBriefingBadge(b.target_date))}</span>
-        <span class="hyena-briefing-item-title">${escapeHtml(b.title)}</span>
-      </a>`
-    )
+        <span class="hyena-briefing-item-title">${escapeHtml(b.title)}</span>${viewHtml}
+      </a>`;
+    })
     .join("");
 
   return `
@@ -2192,10 +2194,8 @@ export function renderWideNewsList(news: any[]) {
     let fireHtml = '';
     let titleWeight = viewCount >= 1 ? '600' : 'normal';
 
-    if (viewCount >= 2) {
-      fireHtml = '<span class="hot-badge" title="인기 기사">HOT 2</span>';
-    } else if (viewCount === 1) {
-      fireHtml = '<span class="hot-badge" title="인기 기사">HOT</span>';
+    if (viewCount >= 1) {
+      fireHtml = `<span class="hot-badge" title="조회수 ${viewCount}회">조회 ${viewCount}</span>`;
     }
 
     html += `

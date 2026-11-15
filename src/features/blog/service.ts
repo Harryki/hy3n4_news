@@ -28,6 +28,7 @@ export interface BlogPostRecord {
   content: string;
   topics_data: string; // JSON string
   target_date: string; // YYYY-MM-DD or YYYY-MM-DD-slot
+  view_count?: number;
   published_at: string;
   created_at: string;
 }
@@ -71,10 +72,17 @@ export async function ensureBlogTable(db: D1Database): Promise<void> {
       content TEXT NOT NULL,
       topics_data TEXT,
       target_date TEXT UNIQUE NOT NULL,
+      view_count INTEGER NOT NULL DEFAULT 0,
       published_at TEXT NOT NULL DEFAULT (datetime('now')),
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `).run();
+
+  try {
+    await db.prepare(`ALTER TABLE blog_posts ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0;`).run();
+  } catch {
+    // Column already exists
+  }
 
   await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC);

@@ -115,7 +115,7 @@ export function renderPage(
   topicKeywords: string | null = null,
   topicMilestones: string | null = null,
   relatedTopics: RelatedTopicNode[] = [],
-  latestBriefings: Array<{ slug: string; title: string; summary?: string; target_date: string; published_at?: string }> = []
+  latestBriefings: Array<{ slug: string; title: string; summary?: string; target_date: string; view_count?: number; published_at?: string }> = []
 ): string {
   page = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   let content = "";
@@ -527,18 +527,18 @@ export async function fetchSitemapTopicsCached(
 export async function fetchLatestBriefingsCached(
   env: Env,
   ctx?: ExecutionContext
-): Promise<Array<{ slug: string; title: string; summary: string; target_date: string; published_at: string }>> {
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/home-briefings/v2`;
+): Promise<Array<{ slug: string; title: string; summary: string; target_date: string; view_count: number; published_at: string }>> {
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/home-briefings/v3`;
 
   return withEdgeCache(cacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     try {
       await ensureBlogTable(env.DB);
       const { results } = await env.DB.prepare(`
-        SELECT slug, title, summary, target_date, published_at
+        SELECT slug, title, summary, target_date, COALESCE(view_count, 0) as view_count, published_at
         FROM blog_posts
         ORDER BY published_at DESC, id DESC
         LIMIT 3;
-      `).all<{ slug: string; title: string; summary: string; target_date: string; published_at: string }>();
+      `).all<{ slug: string; title: string; summary: string; target_date: string; view_count: number; published_at: string }>();
       return (results ?? []).map((r) => ({
         ...r,
         title: stripBlogDatePrefix(r.title),

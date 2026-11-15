@@ -221,11 +221,15 @@ export function renderBlogListPage(
           </a>
         `).join("");
 
+        const views = post.view_count || 0;
+        const viewBadge = views > 0 ? `<span class="hot-badge" title="조회수 ${views}회">조회 ${views}</span>` : "";
+
         return `
           <article class="blog-card">
             <div class="blog-card-meta">
               <span class="blog-date-badge">${formatKoreanDate(post.target_date)}</span>
               <span class="blog-meta-time">발행 ${formatUtcToKst(post.published_at, true)} KST</span>
+              ${viewBadge}
             </div>
             <h2 class="blog-card-title">
               <a href="/blog/${escapeHtml(post.slug)}">${escapeHtml(post.title)}</a>
@@ -442,6 +446,7 @@ export function renderBlogPostPage(
           <div class="blog-article-meta">
             <span class="blog-date-badge">${formatKoreanDate(post.target_date)} 브리핑</span>
             <span class="blog-meta-time">발행일: ${formatUtcToKst(post.published_at, true)} KST</span>
+            ${(post.view_count || 0) > 0 ? `<span class="hot-badge" title="조회수 ${post.view_count}회">조회 ${post.view_count}</span>` : ""}
           </div>
           <h1 class="blog-article-title">${escapeHtml(post.title)}</h1>
           <div class="blog-article-lead">

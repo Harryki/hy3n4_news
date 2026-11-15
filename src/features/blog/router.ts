@@ -31,11 +31,11 @@ blogRouter.get("/blog", async (request, env, ctx) => {
   const offset = (page - 1) * BLOG_PAGE_SIZE;
 
   const isRefresh = url.searchParams.has("refresh") || Boolean(user);
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v4/list?page=${page}`;
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v5/list?page=${page}`;
   
   const fetchFromDb = async () => {
     const { results } = await env.DB.prepare(`
-      SELECT id, slug, title, summary, content, topics_data, target_date, published_at, created_at
+      SELECT id, slug, title, summary, content, topics_data, target_date, COALESCE(view_count, 0) as view_count, published_at, created_at
       FROM blog_posts
       ORDER BY published_at DESC, id DESC
       LIMIT ? OFFSET ?
@@ -91,7 +91,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
   const slug = match![1];
   const user = await getSessionUser(request, env);
 
-  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v4/post/${encodeURIComponent(slug)}`;
+  const cacheKey = `https://hy3n4.news/__cache/d1/blog/v5/post/${encodeURIComponent(slug)}`;
   const data = await withEdgeCache<{
     post: BlogPostRecord | null;
     prevPost: BlogPostRecord | null;
@@ -102,7 +102,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
     ctx,
     async () => {
       const post = await env.DB.prepare(`
-        SELECT id, slug, title, summary, content, topics_data, target_date, published_at, created_at
+        SELECT id, slug, title, summary, content, topics_data, target_date, COALESCE(view_count, 0) as view_count, published_at, created_at
         FROM blog_posts
         WHERE slug = ?
       `).bind(slug).first<BlogPostRecord>();
@@ -160,6 +160,16 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
   }
 
   const post = data.post;
+  const ua = request.headers.get("user-agent") || "";
+  if (request.method === "GET" && !/bot|crawl|spider|slurp|facebookexternalhit|mediapartners/i.test(ua)) {
+    post.view_count = (post.view_count || 0) + 1;
+    ctx.waitUntil(
+      env.DB.prepare("UPDATE blog_posts SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?")
+        .bind(post.id)
+        .run()
+        .catch(() => {})
+    );
+  }
   const content = renderBlogPostPage(post, data.prevPost, data.nextPost);
   const canonicalPath = `/blog/${post.slug}`;
   const seoTitle = `${post.title} | 하이에나뉴스 블로그`;

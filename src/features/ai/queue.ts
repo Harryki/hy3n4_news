@@ -1,4 +1,5 @@
 import { Env } from "../../auth";
+import { formatKstShortTime } from "../../core/utils";
 
 export interface TopicMilestoneItem {
   time: string;
@@ -16,19 +17,6 @@ export interface TopicMilestonesData {
     skip_count: number;
     title_history: string[];
   };
-}
-
-function formatKstTime(utcStr: string | null | undefined): string {
-  if (!utcStr) return "";
-  const normalized = utcStr.endsWith("Z") ? utcStr : utcStr.replace(" ", "T") + "Z";
-  const d = new Date(normalized);
-  if (isNaN(d.getTime())) return String(utcStr).slice(0, 16);
-  const kst = new Date(d.getTime() + 9 * 3600 * 1000);
-  const mm = String(kst.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(kst.getUTCDate()).padStart(2, "0");
-  const hh = String(kst.getUTCHours()).padStart(2, "0");
-  const min = String(kst.getUTCMinutes()).padStart(2, "0");
-  return `${mm}/${dd} ${hh}:${min}`;
 }
 
 function cleanMilestoneText(raw: string): string {
@@ -258,7 +246,7 @@ export async function processNewsQueue(messages: any[], env: Env): Promise<void>
             const articleLines = recentSlice
               .map(
                 (a, idx) =>
-                  `[${idx + 1}] (${formatKstTime(a.published_at || a.created_at)} | ${a.source_name}) ${a.title}${
+                  `[${idx + 1}] (${formatKstShortTime(a.published_at || a.created_at)} | ${a.source_name}) ${a.title}${
                     a.description ? ` - ${String(a.description).slice(0, 100)}` : ""
                   }`
               )
@@ -316,10 +304,10 @@ ${articleLines}
                 ? [parsed.first_milestone]
                 : [cleanedTitle];
 
-              const latestTime = formatKstTime(
+              const latestTime = formatKstShortTime(
                 articles[articles.length - 1].published_at || articles[articles.length - 1].created_at
               );
-              const firstTime = formatKstTime(articles[0].published_at || articles[0].created_at);
+              const firstTime = formatKstShortTime(articles[0].published_at || articles[0].created_at);
 
               const items: TopicMilestoneItem[] = rawMilestones
                 .map((m, idx) => ({
@@ -385,7 +373,7 @@ ${articleLines}
               .slice(-10)
               .map(
                 (a) =>
-                  `- (${formatKstTime(a.published_at || a.created_at)} | ${a.source_name}) ${a.title}${
+                  `- (${formatKstShortTime(a.published_at || a.created_at)} | ${a.source_name}) ${a.title}${
                     a.description ? ` : ${String(a.description).slice(0, 100)}` : ""
                   }`
               )
@@ -484,7 +472,7 @@ ${newArticleText}
                 existingData.meta.title_history.push(updatedTitle);
               }
 
-              const milestoneTime = formatKstTime(
+              const milestoneTime = formatKstShortTime(
                 newArticles[newArticles.length - 1].published_at ||
                   newArticles[newArticles.length - 1].created_at
               );

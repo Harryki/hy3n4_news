@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { Env } from "../../auth";
+import { sendQueueWithRetry } from "../../core/utils";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -67,13 +68,17 @@ function parseRSS(xmlData: string, sourceName: string) {
       }
     }
 
-    let rawDescription = item.description || item.summary || "";
-    rawDescription = rawDescription.replace(/<[^>]*>?/gm, '');
+    let rawDescription = sourceName === "Google News" ? "" : (item.description || item.summary || "");
+    rawDescription = String(rawDescription).replace(/<[^>]*>?/gm, "");
+
+    const cleanTitle = decodeHtmlEntities(String(item.title || "")).replace(/\s+/g, " ").trim();
+    const cleanLink = String(link || "").trim();
+    const cleanDesc = decodeHtmlEntities(rawDescription).replace(/\s+/g, " ").trim().substring(0, 500);
 
     return {
-      title: decodeHtmlEntities(item.title || ""),
-      link: link,
-      description: decodeHtmlEntities(rawDescription).substring(0, 500),
+      title: cleanTitle,
+      link: cleanLink,
+      description: cleanDesc,
       publishedAt: parseItemDate(item)
     };
   }).filter((item: any) => item.title && item.link);
@@ -170,22 +175,9 @@ export async function performRSSFetch(env: Env): Promise<void> {
     const BATCH_SIZE = 100; // D1 max bound parameters per query
     const DELAY_MS = 200;
 
-    const sendWithRetry = async (batch: number[], attempt: number = 1): Promise<void> => {
-      try {
-        await env.NEWS_PROCESSING_QUEUE.send({ news_ids: batch });
-      } catch (error: any) {
-        if (error.message.includes("Too Many Requests") && attempt <= 3) {
-          console.warn(`[QUEUE] Rate limited. Retrying attempt ${attempt}...`);
-          await new Promise(res => setTimeout(res, 1000 * attempt));
-          return sendWithRetry(batch, attempt + 1);
-        }
-        throw error;
-      }
-    };
-
     for (let i = 0; i < allNewIds.length; i += BATCH_SIZE) {
       const batch = allNewIds.slice(i, i + BATCH_SIZE);
-      await sendWithRetry(batch);
+      await sendQueueWithRetry(env.NEWS_PROCESSING_QUEUE, { news_ids: batch });
       if (i + BATCH_SIZE < allNewIds.length) {
         await new Promise(res => setTimeout(res, DELAY_MS));
       }

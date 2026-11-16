@@ -1,14 +1,12 @@
 import { Router } from "../../core/router";
-import { Env } from "../../auth";
+import { isAuthorizedCronRequest } from "../../core/utils";
 import { performRSSFetch } from "./fetcher";
 
 export const rssRouter = new Router();
 
 // Manual cron trigger (protected by secret key)
 rssRouter.get("/___force-rss-update", async (request, env) => {
-  const url = new URL(request.url);
-  const key = url.searchParams.get("key");
-  if (!key || key !== (env as any).CRON_SECRET) {
+  if (!isAuthorizedCronRequest(request, env)) {
     return new Response("Unauthorized", { status: 401 });
   }
   try {

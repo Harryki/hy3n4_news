@@ -58,66 +58,30 @@ export function stripBlogDatePrefix(title: string): string {
 let blogTableInitialized = false;
 
 /**
- * Ensures blog_posts table and indexes exist in D1, and normalizes legacy titles.
+ * Ensures blog_posts table and indexes exist in D1 (called before publishing new posts).
  */
 export async function ensureBlogTable(db: D1Database): Promise<void> {
   if (blogTableInitialized) return;
 
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS blog_posts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      slug TEXT UNIQUE NOT NULL,
-      title TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      content TEXT NOT NULL,
-      topics_data TEXT,
-      target_date TEXT UNIQUE NOT NULL,
-      view_count INTEGER NOT NULL DEFAULT 0,
-      published_at TEXT NOT NULL DEFAULT (datetime('now')),
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `).run();
-
-  try {
-    await db.prepare(`ALTER TABLE blog_posts ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0;`).run();
-  } catch {
-    // Column already exists
-  }
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC);
-  `).run();
-
-  try {
-    const { results: legacyPosts } = await db
-      .prepare("SELECT id, title FROM blog_posts WHERE title LIKE '%:%' OR title LIKE '%→%' LIMIT 100")
-      .all<{ id: number; title: string }>();
-
-    if (legacyPosts && legacyPosts.length > 0) {
-      const stmts = [];
-      for (const row of legacyPosts) {
-        const cleaned = stripBlogDatePrefix(row.title);
-        if (cleaned && cleaned !== row.title) {
-          stmts.push(db.prepare("UPDATE blog_posts SET title = ? WHERE id = ?").bind(cleaned, row.id));
-        }
-      }
-      if (stmts.length > 0) {
-        await db.batch(stmts);
-      }
-    }
-
-    // Clean arrows from recent active topics as well
-    await db
-      .prepare(`
-        UPDATE topics
-        SET title = REPLACE(REPLACE(title, ' → ', ' · '), '→', '·')
-        WHERE updated_at >= datetime('now', '-3 days')
-          AND title LIKE '%→%'
-      `)
-      .run();
-  } catch (e) {
-    console.warn("[BLOG] Legacy title cleanup skipped:", e);
-  }
+  await db.batch([
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS blog_posts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        content TEXT NOT NULL,
+        topics_data TEXT,
+        target_date TEXT UNIQUE NOT NULL,
+        view_count INTEGER NOT NULL DEFAULT 0,
+        published_at TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `),
+    db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC);
+    `),
+  ]);
 
   blogTableInitialized = true;
 }

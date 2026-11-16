@@ -13,19 +13,10 @@ import { rssRouter } from "./features/rss/router";
 import { userRouter } from "./features/user/router";
 import { aiRouter } from "./features/ai/router";
 import { blogRouter } from "./features/blog/router";
-import { ensureBlogTable } from "./features/blog/service";
 import { getSessionUser } from "./auth";
+import { escapeXml, toIsoUtcString } from "./core/utils";
 
 export const app = new Router({ trailingSlash: "never" });
-
-function escapeXml(str: string): string {
-  return (str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
 
 function renderLlmsMarkdown(
   hotTopics: any[],
@@ -205,17 +196,6 @@ app.get("/llms-full.txt", async (_request, env, ctx) => {
   });
 });
 
-function toIsoUtcString(sqlOrIso?: string | null, fallback?: string): string {
-  if (!sqlOrIso) return fallback || new Date().toISOString();
-  const normalized = sqlOrIso.endsWith("Z")
-    ? sqlOrIso
-    : `${sqlOrIso.replace(" ", "T")}Z`;
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime())
-    ? fallback || new Date().toISOString()
-    : parsed.toISOString();
-}
-
 // SEO: Dynamic sitemap.xml (includes active topic cluster pages and blog posts, cached at Edge for 30m)
 app.get("/sitemap.xml", async (_request, env, ctx) => {
   const [topics, blogPosts] = await Promise.all([
@@ -226,7 +206,6 @@ app.get("/sitemap.xml", async (_request, env, ctx) => {
       ctx,
       async () => {
         try {
-          await ensureBlogTable(env.DB);
           const { results } = await env.DB.prepare(
             "SELECT slug, published_at FROM blog_posts ORDER BY published_at DESC LIMIT 200"
           ).all<{ slug: string; published_at: string }>();

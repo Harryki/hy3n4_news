@@ -1,3 +1,5 @@
+import { getCookie } from "./core/utils";
+
 export interface Env {
   DB: D1Database;
   GOOGLE_CLIENT_ID: string;
@@ -186,7 +188,6 @@ export async function getSessionUser(request: Request, env: Env): Promise<Sessio
 }
 
 function getSessionToken(request: Request): string | null {
-  const cookie = request.headers.get("Cookie") ?? "";
-  const match = cookie.match(/session=([a-f0-9]+)/);
-  return match ? match[1] : null;
+  const token = getCookie(request, "session");
+  return token && /^[a-f0-9]+$/.test(token) ? token : null;
 }

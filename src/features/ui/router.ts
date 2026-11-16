@@ -1,7 +1,8 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
-import { getRelativeTime } from "../../core/utils";
-import { ensureBlogTable, stripBlogDatePrefix } from "../blog/service";
+import { getCookie, getRelativeTime } from "../../core/utils";
+import { stripBlogDatePrefix } from "../blog/service";
+import { searchTopicsHybrid } from "../ai/router";
 import {
   renderHTML,
   renderNewsList,
@@ -317,12 +318,6 @@ export function renderPage(
   });
 }
 
-function getCookie(request: Request, name: string): string | null {
-  const cookieStr = request.headers.get("Cookie") || "";
-  const match = cookieStr.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-  return match ? match[1] : null;
-}
-
 export const EDGE_CACHE_TTL_SECONDS = 1800; // 30 minutes (matches RSS cron interval */30 * * * *)
 export const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300, s-maxage=1800, stale-while-revalidate=1800";
 
@@ -532,7 +527,6 @@ export async function fetchLatestBriefingsCached(
 ): Promise<Array<{ slug: string; title: string; summary: string; target_date: string; view_count: number; published_at: string }>> {
   return withEdgeCache(HOME_BRIEFINGS_CACHE_KEY, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
     try {
-      await ensureBlogTable(env.DB);
       const { results } = await env.DB.prepare(`
         SELECT slug, title, summary, target_date, COALESCE(view_count, 0) as view_count, published_at
         FROM blog_posts
@@ -619,80 +613,9 @@ uiRouter.get("/search", async (request, env) => {
   const q = url.searchParams.get("q")?.trim() || null;
   const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
-  const limit = 20;
-  const offset = (page - 1) * limit;
   const user = await getSessionUser(request, env);
 
-  let topics: any[] = [];
-  let hasMore = false;
-
-  if (q) {
-    // Hybrid Search Logic (similar to api/search)
-    const embedRes = await env.AI.run(env.EMBEDDING_MODEL, { text: [q] });
-    const vector = embedRes.data[0];
-    const semanticRes = await env.VECTORIZE.query(vector, { topK: 15, returnMetadata: "none" });
-    const semanticIds = semanticRes.matches
-      .filter((m: any) => m.score > 0.5)
-      .map((m: any) => parseInt(m.id, 10));
-
-    const semanticPlaceholders = semanticIds.length > 0 ? semanticIds.map(() => '?').join(',') : null;
-    const whereClause = semanticPlaceholders
-      ? `t.id IN (${semanticPlaceholders}) OR (t.updated_at >= datetime('now', '-14 days') AND (t.title LIKE ? OR t.keywords LIKE ?))`
-      : `t.updated_at >= datetime('now', '-14 days') AND (t.title LIKE ? OR t.keywords LIKE ?)`;
-    const bindParams = semanticPlaceholders
-      ? [...semanticIds, `%${q}%`, `%${q}%`]
-      : [`%${q}%`, `%${q}%`];
-
-    const { results } = await env.DB.prepare(`
-            SELECT t.id, t.title, t.keywords, t.updated_at,
-                   MAX(t.last_summarized_count, 1) as article_count
-            FROM topics t
-            WHERE ${whereClause}
-            ORDER BY t.updated_at DESC
-            LIMIT ? OFFSET ?
-        `).bind(...bindParams, limit + 1, offset).all();
-    topics = results || [];
-  } else {
-    // Latest Topics
-    const { results } = await env.DB.prepare(`
-            SELECT t.id, t.title, t.keywords, t.updated_at,
-                   MAX(t.last_summarized_count, 1) as article_count
-            FROM topics t
-            WHERE t.last_summarized_count >= 2
-            ORDER BY t.updated_at DESC
-            LIMIT ? OFFSET ?
-        `).bind(limit + 1, offset).all();
-    topics = results || [];
-  }
-
-  if (topics.length > limit) {
-    hasMore = true;
-    topics.pop();
-  }
-
-  const newsByTopic: Record<number, any[]> = {};
-  if (topics.length > 0) {
-    const topicIds = topics.map(t => t.id);
-    const placeholders = topicIds.map(() => '?').join(',');
-    const { results: news } = await env.DB.prepare(`
-            SELECT n.id, n.title, n.url, n.published_at, n.created_at, s.name as source_name, nt.topic_id
-            FROM news n
-            JOIN sources s ON n.source_id = s.id
-            JOIN news_topics nt ON n.id = nt.news_id
-            WHERE nt.topic_id IN (${placeholders})
-            ORDER BY n.published_at DESC
-        `).bind(...topicIds).all();
-
-    if (news) {
-      for (const item of news) {
-        const tid = item.topic_id as number;
-        if (!newsByTopic[tid]) newsByTopic[tid] = [];
-        if (newsByTopic[tid].length < 5) {
-          newsByTopic[tid].push(item);
-        }
-      }
-    }
-  }
+  const { topics, newsByTopic, hasMore } = await searchTopicsHybrid(env, q, page, 20);
 
   const content = renderSearchResults(q, topics, newsByTopic, page, hasMore);
   const searchTitle = q ? `"${q}" 뉴스 토픽 검색 결과 | 하이에나뉴스` : "최신 뉴스 토픽 목록 | 하이에나뉴스";
@@ -788,7 +711,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
   const fromTopicId = Number.isFinite(rawFrom) && rawFrom > 0 && rawFrom !== topicId ? rawFrom : null;
   const user = await getSessionUser(request, env);
 
-  const topicCacheKey = `https://hy3n4.news/__cache/d1/topic/v8/${topicId}?page=${page}`;
+  const topicCacheKey = `https://hy3n4.news/__cache/d1/topic/v9/${topicId}?page=${page}`;
   const topicData = await withEdgeCache<{
     topicRow: { id: number; title: string; created_at: string; updated_at: string; keywords: string; milestones: string | null } | null;
     news: NewsRow[];
@@ -803,7 +726,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     }
 
     const { results: rawNews } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.description, n.published_at, n.created_at, s.name as source_name
+        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name
         FROM news_topics nt
         JOIN news n ON n.id = nt.news_id
         CROSS JOIN sources s ON n.source_id = s.id
@@ -966,7 +889,7 @@ uiRouter.get("/user", async (request, env) => {
   if (!user) return new Response(null, { status: 302, headers: { Location: "/login" } });
 
   const { results: news } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.published_at, n.created_at, s.name as source_name,
+        SELECT n.id, n.title, n.url, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name,
                (SELECT group_concat(t.keywords, ', ') FROM news_topics nt JOIN topics t ON nt.topic_id = t.id WHERE nt.news_id = n.id) as keywords
         FROM news n
         JOIN votes v ON n.id = v.news_id

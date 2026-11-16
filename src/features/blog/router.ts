@@ -1,10 +1,10 @@
 import { Router } from "../../core/router";
-import { Env, getSessionUser } from "../../auth";
+import { getSessionUser } from "../../auth";
+import { isAuthorizedCronRequest } from "../../core/utils";
 import { renderHTML } from "../ui/templates";
 import { HOME_BRIEFINGS_CACHE_KEY } from "../ui/router";
 import {
   BlogPostRecord,
-  ensureBlogTable,
   publishDailyBlogPost,
   stripBlogDatePrefix,
 } from "./service";
@@ -23,7 +23,6 @@ const BLOG_PAGE_SIZE = 10;
  * GET /blog - Blog Post List
  */
 blogRouter.get("/blog", async (request, env) => {
-  await ensureBlogTable(env.DB);
   const user = await getSessionUser(request, env);
   const url = new URL(request.url);
   const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
@@ -77,7 +76,6 @@ blogRouter.get("/blog", async (request, env) => {
  * GET /blog/:slug - Individual Blog Post
  */
 blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
-  await ensureBlogTable(env.DB);
   const slug = match![1];
   const user = await getSessionUser(request, env);
 
@@ -176,11 +174,10 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
  *   /api/cron/daily-blog?key=YOUR_CRON_SECRET&date=2026-11-04&slot=morning
  */
 blogRouter.get("/api/cron/daily-blog", async (request, env) => {
-  const url = new URL(request.url);
-  const key = url.searchParams.get("key");
-  if (!key || key !== (env as any).CRON_SECRET) {
+  if (!isAuthorizedCronRequest(request, env)) {
     return new Response("Unauthorized", { status: 401 });
   }
+  const url = new URL(request.url);
 
   const dateParam = url.searchParams.get("date")?.trim(); // optional override (e.g. 2026-11-04)
   const slotParam = url.searchParams.get("slot")?.trim() as any; // optional slot: morning | afternoon | evening

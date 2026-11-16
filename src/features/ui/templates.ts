@@ -1,4 +1,4 @@
-import { getRelativeTime } from "../../core/utils";
+import { escapeHtml, getRelativeTime } from "../../core/utils";
 
 export const CSS_STYLES = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2131,10 +2131,6 @@ export function renderHyenaBriefing(
       </div>
     </section>
   `;
-}
-
-function escapeHtml(str: string): string {
-  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export function renderPagination(opts: { page: number; hasMore: boolean; prevUrl: string | null; nextUrl: string | null; firstUrl: string | null }): string {

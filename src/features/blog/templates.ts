@@ -1,13 +1,7 @@
 import { BlogPostRecord } from "./service";
+import { escapeHtml, formatUtcToKst } from "../../core/utils";
 
-export function escapeHtml(str: string): string {
-  return (str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+export { escapeHtml, formatUtcToKst };
 
 /**
  * Lightweight, safe Markdown to HTML converter tailored for news blog posts.
@@ -173,30 +167,6 @@ export function formatKoreanDate(dateStr: string): string {
     if (slot === "evening") return `${base} 저녁`;
   }
   return base;
-}
-
-/**
- * Converts a SQLite UTC datetime string ("YYYY-MM-DD HH:MM:SS" or ISO) into KST (+09:00).
- */
-export function formatUtcToKst(utcStr: string, includeTime: boolean = true): string {
-  if (!utcStr) return "";
-  const normalized = utcStr.includes("T")
-    ? (utcStr.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(utcStr) ? utcStr : `${utcStr}Z`)
-    : `${utcStr.replace(" ", "T")}Z`;
-  const parsed = new Date(normalized);
-  if (Number.isNaN(parsed.getTime())) {
-    return includeTime ? utcStr.slice(0, 16) : utcStr.slice(0, 10);
-  }
-  const kst = new Date(parsed.getTime() + 9 * 3600 * 1000);
-  const y = kst.getUTCFullYear();
-  const m = String(kst.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(kst.getUTCDate()).padStart(2, "0");
-  if (!includeTime) {
-    return `${y}-${m}-${d}`;
-  }
-  const hh = String(kst.getUTCHours()).padStart(2, "0");
-  const mm = String(kst.getUTCMinutes()).padStart(2, "0");
-  return `${y}-${m}-${d} ${hh}:${mm}`;
 }
 
 /**

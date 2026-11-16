@@ -1,5 +1,6 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser, handleLogin, handleCallback, handleLogout } from "../../auth";
+import { getCookie } from "../../core/utils";
 
 export const userRouter = new Router();
 
@@ -71,12 +72,6 @@ export const FEEDBACK_FEATURES: Record<string, string> = {
   community: "토픽별 유저 댓글·토론 또는 투표 기능 강화",
 };
 
-function getCookieValue(request: Request, name: string): string | null {
-  const cookie = request.headers.get("Cookie") ?? "";
-  const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-  return match ? match[1] : null;
-}
-
 function generateVisitorId(): string {
   const arr = new Uint8Array(16);
   crypto.getRandomValues(arr);
@@ -137,7 +132,7 @@ userRouter.post("/api/feedback", async (request, env) => {
     }
 
     const user = await getSessionUser(request, env);
-    const existingVid = getCookieValue(request, "hy3n4_vid");
+    const existingVid = getCookie(request, "hy3n4_vid");
     const visitorId =
       existingVid && /^[a-f0-9]{16,64}$/i.test(existingVid)
         ? existingVid

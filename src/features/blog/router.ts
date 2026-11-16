@@ -1,8 +1,8 @@
 import { Router } from "../../core/router";
 import { getSessionUser } from "../../auth";
 import { isAuthorizedCronRequest } from "../../core/utils";
+import { HOME_BRIEFINGS_CACHE_KEY, invalidateEdgeCache } from "../../core/cache";
 import { renderHTML } from "../ui/templates";
-import { HOME_BRIEFINGS_CACHE_KEY } from "../ui/router";
 import {
   BlogPostRecord,
   publishDailyBlogPost,
@@ -54,7 +54,7 @@ blogRouter.get("/blog", async (request, env) => {
   const canonicalPath = page > 1 ? `/blog?page=${page}` : "/blog";
 
   return new Response(
-    renderHTML(content, user?.username || null, 25, 24, {
+    renderHTML(content, user?.username || null, {
       title: pageTitle,
       description: pageDesc,
       canonicalPath,
@@ -94,8 +94,6 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
           <a href="/blog" class="filter-btn active" style="display: inline-block; margin-top: 16px;">블로그 목록으로</a>
         </div>`,
         user?.username || null,
-        25,
-        24,
         {
           title: "포스트를 찾을 수 없습니다 | 하이에나뉴스 블로그",
           noindex: true,
@@ -139,7 +137,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
           await env.DB.prepare("UPDATE blog_posts SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?")
             .bind(post.id)
             .run();
-          await caches.default.delete(new Request(HOME_BRIEFINGS_CACHE_KEY));
+          await invalidateEdgeCache(HOME_BRIEFINGS_CACHE_KEY);
         } catch {}
       })()
     );
@@ -150,7 +148,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
   const seoTitle = `${post.title} | 하이에나뉴스 블로그`;
 
   return new Response(
-    renderHTML(content, user?.username || null, 25, 24, {
+    renderHTML(content, user?.username || null, {
       title: seoTitle,
       description: post.summary,
       canonicalPath,

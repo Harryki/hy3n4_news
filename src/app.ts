@@ -1,13 +1,15 @@
 import { Router } from "./core/router";
 import {
+  withEdgeCache,
+  EDGE_CACHE_TTL_SECONDS,
+  PUBLIC_HTML_CACHE_CONTROL,
+} from "./core/cache";
+import {
   uiRouter,
   renderNotFoundPage,
   fetchHotTopicsCached,
   fetchNewsCached,
   fetchSitemapTopicsCached,
-  withEdgeCache,
-  EDGE_CACHE_TTL_SECONDS,
-  PUBLIC_HTML_CACHE_CONTROL,
 } from "./features/ui/router";
 import { rssRouter } from "./features/rss/router";
 import { userRouter } from "./features/user/router";

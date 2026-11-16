@@ -1,4 +1,5 @@
 import { Env } from "../../auth";
+import { HOME_BRIEFINGS_CACHE_KEY, invalidateEdgeCache } from "../../core/cache";
 import { parseTopicMilestones, TopicMilestonesData } from "../ai/queue";
 
 export type BlogSlot = "morning" | "afternoon" | "evening";
@@ -589,6 +590,8 @@ export async function publishDailyBlogPost(
     topicsDataJson,
     targetDateKey
   ).run();
+
+  await invalidateEdgeCache(HOME_BRIEFINGS_CACHE_KEY);
 
   console.log(`[BLOG] Successfully published blog post: ${slug} ("${aiPost.title}")`);
 

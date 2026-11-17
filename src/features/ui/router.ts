@@ -332,7 +332,7 @@ export function getNewsBoardCacheKey(
   page: number = 1,
   limit: number = HOME_PAGE_SIZE
 ): string {
-  return `https://hy3n4.news/__cache/d1/news-board/v3?sort=${sort}&page=${page}&limit=${limit}`;
+  return `https://hy3n4.news/__cache/d1/news-board/v4?sort=${sort}&page=${page}&limit=${limit}`;
 }
 
 export async function fetchNewsCached(
@@ -357,33 +357,36 @@ export async function fetchNewsCached(
           viewedIndexEnsured = true;
           try {
             await env.DB.batch([
-              env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_news_viewed_recent ON news(published_at DESC) WHERE view_count > 0 OR upvotes > 0"),
+              env.DB.prepare(
+                "CREATE INDEX IF NOT EXISTS idx_news_hot_covering ON news(published_at DESC, view_count, upvotes, created_at) WHERE view_count > 0"
+              ),
+              env.DB.prepare("DROP INDEX IF EXISTS idx_news_viewed_recent"),
               env.DB.prepare("DROP INDEX IF EXISTS idx_news_views_published"),
             ]);
           } catch {}
         }
 
         // Hacker News style time-decay ranking over the last 24h:
-        // 1) viewed_recent scans ONLY clicked articles in 24h via partial index idx_news_viewed_recent
+        // 1) viewed_recent scans ONLY clicked articles in 24h via covering partial index idx_news_hot_covering (zero table lookups during scoring)
         // 2) unviewed_recent reads at most (offset + fetchLimit) rows in index order via idx_news_feed_composite
         const timeAgo24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const { results, meta } = await env.DB.prepare(`
           -- NEWS QUERY
           WITH viewed_recent AS (
-              SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at,
+              SELECT id, published_at, created_at,
                      1 as tier,
                      ((view_count * 10.0 + upvotes * 3.0 + 1.0) / POW(MAX((julianday('now') - julianday(published_at)) * 24.0, 0.0) + 2.0, 1.5)) as sort_score
-              FROM news
-              WHERE (view_count > 0 OR upvotes > 0)
+              FROM news INDEXED BY idx_news_hot_covering
+              WHERE view_count > 0
                 AND published_at >= ?
           ),
           unviewed_recent AS (
-              SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at,
+              SELECT id, published_at, created_at,
                      0 as tier,
                      0.0 as sort_score
-              FROM news
+              FROM news INDEXED BY idx_news_feed_composite
               WHERE published_at >= ?
-                AND view_count = 0 AND upvotes = 0
+                AND view_count = 0
               ORDER BY published_at DESC, created_at DESC
               LIMIT ?
           ),
@@ -392,8 +395,8 @@ export async function fetchNewsCached(
               UNION ALL
               SELECT * FROM unviewed_recent
           ),
-          page_news AS (
-              SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at
+          page_ids AS (
+              SELECT id
               FROM combined
               ORDER BY tier DESC, sort_score DESC, published_at DESC, created_at DESC
               LIMIT ? OFFSET ?
@@ -405,7 +408,8 @@ export async function fetchNewsCached(
                FROM news_topics nt 
                JOIN topics t ON nt.topic_id = t.id 
                WHERE nt.news_id = n.id) as keywords
-          FROM page_news n
+          FROM page_ids p
+          CROSS JOIN news n ON n.id = p.id
           CROSS JOIN sources s ON n.source_id = s.id;
         `).bind(timeAgo24h, timeAgo24h, offset + fetchLimit, fetchLimit, offset).all<NewsRow>();
 

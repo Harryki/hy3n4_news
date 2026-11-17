@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS news_topics (
 -- Handles the Main Feed (WHERE published_at / ORDER BY created_at)
 CREATE INDEX IF NOT EXISTS idx_news_feed_composite ON news(published_at DESC, created_at DESC);
 
+-- Handles the Main Feed Popular/Views sort (ORDER BY view_count DESC, published_at DESC, created_at DESC)
+CREATE INDEX IF NOT EXISTS idx_news_views_published ON news(view_count DESC, published_at DESC, created_at DESC);
+
 -- Handles the Keyword Search sort (ORDER BY COALESCE)
 -- This is a functional index supported by D1 (SQLite)
 CREATE INDEX IF NOT EXISTS idx_news_coalesce_sort ON news(COALESCE(published_at, created_at) DESC);

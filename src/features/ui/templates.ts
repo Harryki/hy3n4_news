@@ -10,31 +10,6 @@ export interface SeoOptions {
   hasFeedback?: boolean;
 }
 
-export function renderFilters(currentLimit: number = 25, currentTime: number = 24): string {
-  const limits = [5, 10, 15, 25];
-  const times = [1, 3, 6, 12, 24];
-
-  const limitsHtml = limits.map(l =>
-    `<a href="/?limit=${l}&time=${currentTime}" class="filter-btn ${l === currentLimit ? 'active' : ''}">${l}개</a>`
-  ).join('');
-
-  const timesHtml = times.map(t =>
-    `<a href="/?limit=${currentLimit}&time=${t}" class="filter-btn ${t === currentTime ? 'active' : ''}">${t}시간</a>`
-  ).join('');
-
-  return `
-    <div class="filters">
-        <div class="filter-group">
-            <span class="filter-label">언론사별 기사:</span>
-            ${limitsHtml}
-        </div>
-        <div class="filter-group">
-            <span class="filter-label">수집 기간:</span>
-            ${timesHtml}
-        </div>
-    </div>`;
-}
-
 export function renderHTML(
   content: string,
   user: string | null = null,
@@ -94,7 +69,7 @@ export function renderHTML(
   <link rel="alternate" type="text/markdown" href="https://hy3n4.news/llms-full.txt" title="LLM Full Context (Hot Topics & Headlines)">
   <link rel="alternate" type="application/json" href="https://hy3n4.news/api/trends" title="Korean News Trends JSON API">
   <link rel="icon" type="image/svg+xml" href="/hyena.svg">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=2">
 
   <script type="application/ld+json">${jsonLdScript}</script>
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
@@ -444,46 +419,70 @@ export function renderHTML(
 }
 
 
-export function renderNewsList(sourceName: string, news: any[]) {
-  let html = `<div class="news-column">
-      <div class="column-header">${sourceName}</div>
-      <ul class="news-list">`;
+export function renderNewsBoard(news: any[], sort: "latest" | "views" = "latest"): string {
+  let rowsHtml = "";
 
-  news.forEach((item) => {
-    let keywordHtml = '';
-    if (item.keywords && typeof item.keywords === 'string') {
-      const uniqueKeywords = Array.from(new Set(item.keywords.split(',').map((k: string) => k.trim()).filter((k: string) => k !== '')));
-      keywordHtml = `<div class="news-item-tags">${uniqueKeywords.slice(0, 3).map(k => `#${k}`).join(' ')}</div>`;
-    }
+  if (!news || news.length === 0) {
+    rowsHtml = `<li class="board-empty">표시할 기사가 없습니다.</li>`;
+  } else {
+    news.forEach((item) => {
+      let tagsText = "";
+      if (item.keywords && typeof item.keywords === "string") {
+        const uniqueKeywords = Array.from(
+          new Set<string>(
+            item.keywords
+              .split(",")
+              .map((k: string) => k.trim())
+              .filter((k: string) => k !== "")
+          )
+        );
+        if (uniqueKeywords.length > 0) {
+          tagsText = uniqueKeywords
+            .slice(0, 3)
+            .map((k) => `#${escapeHtml(k)}`)
+            .join(" ");
+        }
+      }
 
-    const domain = new URL(item.url).hostname.replace('www.', '');
-    const timeStr = getRelativeTime(item.published_at, item.created_at);
+      const timeStr = getRelativeTime(item.published_at, item.created_at);
+      const viewCount = item.view_count || 0;
+      const isHot = viewCount >= 1;
 
-    const viewCount = item.view_count || 0;
-    let fireHtml = '';
-    let titleWeight = viewCount >= 1 ? '600' : 'normal';
-
-    if (viewCount >= 1) {
-      fireHtml = `<span class="hot-badge" title="조회수 ${viewCount}회">조회 ${viewCount}</span>`;
-    }
-
-    html += `
-        <li class="news-item">
-          <div class="news-content">
-            <a href="/go/${item.id}" rel="nofollow" target="_blank" class="news-title">
-              <span style="font-weight: ${titleWeight};">${item.title}</span>${fireHtml}
-            </a>
-            <div class="news-meta">
-              <span class="meta-pill meta-time">${timeStr}</span>
-              <span class="news-domain">(${domain})</span>
-              ${keywordHtml}
-            </div>
+      rowsHtml += `
+        <li class="board-row">
+          <div class="board-col-title">
+            <a href="/go/${item.id}" rel="nofollow" target="_blank" class="board-title${isHot ? " is-viewed" : ""}">${escapeHtml(item.title)}</a>
+            ${tagsText ? `<span class="board-tags">${tagsText}</span>` : ""}
+          </div>
+          <div class="board-col-meta">
+            <span class="board-source">${escapeHtml(item.source_name || "")}</span>
+            <span class="board-time">${escapeHtml(timeStr)}</span>
+            <span class="board-views${isHot ? " is-hot" : ""}"><span class="board-views-label">조회 </span>${viewCount}</span>
+            ${tagsText ? `<span class="board-tags-mobile">${tagsText}</span>` : ""}
           </div>
         </li>`;
-  });
+    });
+  }
 
-  html += `</ul></div>`;
-  return html;
+  return `
+    <section class="news-board" aria-label="실시간 뉴스 게시판">
+      <div class="board-toolbar">
+        <h2 class="board-heading">전체 뉴스</h2>
+        <div class="blog-sort-tabs" role="tablist" aria-label="뉴스 정렬">
+          <a href="/" class="blog-sort-tab ${sort === "latest" ? "active" : ""}">최신순</a>
+          <a href="/?sort=views" class="blog-sort-tab ${sort === "views" ? "active" : ""}">조회순</a>
+        </div>
+      </div>
+      <div class="board-table-head" aria-hidden="true">
+        <span class="board-th-title">제목</span>
+        <span class="board-th-source">언론사</span>
+        <span class="board-th-time">작성시간</span>
+        <span class="board-th-views">조회</span>
+      </div>
+      <ul class="board-list">
+        ${rowsHtml}
+      </ul>
+    </section>`;
 }
 
 function getMilestoneCount(milestonesJson: string | null | undefined): number {

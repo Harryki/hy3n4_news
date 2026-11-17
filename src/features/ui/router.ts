@@ -1,24 +1,24 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
-import { getCookie, getRelativeTime } from "../../core/utils";
+import { getRelativeTime } from "../../core/utils";
 import {
   EDGE_CACHE_TTL_SECONDS,
   PUBLIC_HTML_CACHE_CONTROL,
   HOME_BRIEFINGS_CACHE_KEY,
+  invalidateEdgeCache,
   withEdgeCache,
 } from "../../core/cache";
 import { stripBlogDatePrefix } from "../blog/service";
 import { searchTopicsHybrid } from "../ai/router";
 import {
   renderHTML,
-  renderNewsList,
+  renderNewsBoard,
   renderTopics,
   renderHyenaBriefing,
   renderWideNewsList,
   renderSearchResults,
   renderPagination,
   renderTopicTimeline,
-  renderFilters,
   SeoOptions,
 } from "./templates";
 
@@ -109,19 +109,21 @@ export function renderNotFoundPage(user: { username: string; has_feedback?: numb
   });
 }
 
+export const HOME_PAGE_SIZE = 20;
+export type NewsSort = "latest" | "views";
+
 export function renderHomePage(opts: {
   news: NewsRow[];
+  hasMore: boolean;
   hotTopics: TopicRow[];
   latestBriefings: Array<{ slug: string; title: string; summary?: string; target_date: string; view_count?: number; published_at?: string }>;
   user: any;
   page?: number;
-  limit?: number;
-  timeHours?: number;
+  sort?: NewsSort;
 }): string {
-  const { news, hotTopics, latestBriefings, user } = opts;
+  const { news, hasMore, hotTopics, latestBriefings, user } = opts;
   const page = Number.isFinite(opts.page) && opts.page! > 0 ? Math.floor(opts.page!) : 1;
-  const currentLimit = opts.limit ?? 25;
-  const currentTime = opts.timeHours ?? 24;
+  const sort: NewsSort = opts.sort === "views" ? "views" : "latest";
   let content = "";
 
   if (hotTopics && hotTopics.length > 0) {
@@ -132,35 +134,18 @@ export function renderHomePage(opts: {
     content += renderHyenaBriefing(latestBriefings);
   }
 
-  content += renderFilters(currentLimit, currentTime);
+  content += renderNewsBoard(news, sort);
 
-  const itemsBySource: Record<string, NewsRow[]> = {};
-  news.forEach((item) => {
-    const sourceName = item.source_name || "Unknown";
-    if (!itemsBySource[sourceName]) {
-      itemsBySource[sourceName] = [];
+  const buildPageUrl = (targetPage: number) => {
+    if (sort === "views") {
+      return targetPage > 1 ? `/?sort=views&page=${targetPage}` : `/?sort=views`;
     }
-    if (itemsBySource[sourceName].length < currentLimit) {
-      itemsBySource[sourceName].push(item);
-    }
-  });
+    return targetPage > 1 ? `/?page=${targetPage}` : `/`;
+  };
 
-  const sources = Object.keys(itemsBySource).sort((a, b) => {
-    const aTime = new Date(itemsBySource[a][0]?.published_at ?? 0).getTime();
-    const bTime = new Date(itemsBySource[b][0]?.published_at ?? 0).getTime();
-    return bTime - aTime;
-  });
-
-  let colsHtml = "";
-  sources.forEach((sourceName) => {
-    colsHtml += renderNewsList(sourceName, itemsBySource[sourceName]);
-  });
-  content += `<div class="news-columns">${colsHtml}</div>`;
-
-  const hasMore = Array.isArray(news) && news.length >= currentLimit;
-  const prevUrl = page > 1 ? `/?page=${page - 1}&limit=${currentLimit}&time=${currentTime}` : null;
-  const nextUrl = hasMore ? `/?page=${page + 1}&limit=${currentLimit}&time=${currentTime}` : null;
-  const firstUrl = page > 1 ? `/?page=1&limit=${currentLimit}&time=${currentTime}` : null;
+  const prevUrl = page > 1 ? buildPageUrl(page - 1) : null;
+  const nextUrl = hasMore ? buildPageUrl(page + 1) : null;
+  const firstUrl = page > 1 ? buildPageUrl(1) : null;
   content += renderPagination({ page, hasMore, prevUrl, nextUrl, firstUrl });
 
   const topTopicTitles = (hotTopics || []).slice(0, 4).map((t) => t.title).filter(Boolean);
@@ -340,44 +325,63 @@ export function renderUserVotesPage(opts: { news: NewsRow[]; user: any }): strin
   });
 }
 
+export function getNewsBoardCacheKey(
+  sort: NewsSort = "latest",
+  page: number = 1,
+  limit: number = HOME_PAGE_SIZE
+): string {
+  return `https://hy3n4.news/__cache/d1/news-board/v1?sort=${sort}&page=${page}&limit=${limit}`;
+}
+
 export async function fetchNewsCached(
   env: Env,
   ctx: ExecutionContext | undefined,
-  timeHours: number = 24,
-  limit: number = 10,
-  page: number = 1
-): Promise<NewsRow[]> {
-  const offset = (page - 1) * limit;
-  const upperLimit = page * limit;
-  const newsCacheKey = `https://hy3n4.news/__cache/d1/news?time=${timeHours}&limit=${limit}&page=${page}`;
+  page: number = 1,
+  sort: NewsSort = "latest",
+  limit: number = HOME_PAGE_SIZE
+): Promise<{ news: NewsRow[]; hasMore: boolean }> {
+  const safePage = Math.min(Math.max(1, Math.floor(page)), 100);
+  const offset = (safePage - 1) * limit;
+  const fetchLimit = limit + 1;
+  const newsCacheKey = getNewsBoardCacheKey(sort, safePage, limit);
 
-  return withEdgeCache<NewsRow[]>(newsCacheKey, EDGE_CACHE_TTL_SECONDS, ctx, async () => {
-    const now = new Date();
-    const timeAgo = new Date(now.getTime() - timeHours * 60 * 60 * 1000).toISOString();
+  return withEdgeCache<{ news: NewsRow[]; hasMore: boolean }>(
+    newsCacheKey,
+    EDGE_CACHE_TTL_SECONDS,
+    ctx,
+    async () => {
+      const orderByClause =
+        sort === "views"
+          ? "view_count DESC, published_at DESC, created_at DESC"
+          : "published_at DESC, created_at DESC";
 
-    const { results } = await env.DB.prepare(`
+      const { results } = await env.DB.prepare(`
         -- NEWS QUERY
-        WITH ranked_news AS (
-            SELECT id, source_id, title, url, description, upvotes, view_count, published_at, created_at,
-                   ROW_NUMBER() OVER (PARTITION BY +source_id ORDER BY published_at DESC) as rn
+        WITH page_news AS (
+            SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at
             FROM news
-            WHERE published_at >= ?
+            ORDER BY ${orderByClause}
+            LIMIT ? OFFSET ?
         )
         SELECT 
-            n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, 
+            n.id, n.title, n.url, '' as description, n.upvotes, n.view_count, n.published_at, n.created_at, 
             s.name as source_name,
             (SELECT group_concat(t.keywords, ', ') 
              FROM news_topics nt 
              JOIN topics t ON nt.topic_id = t.id 
              WHERE nt.news_id = n.id) as keywords
-        FROM ranked_news n
-        JOIN sources s ON n.source_id = s.id
-        WHERE n.rn > ? AND n.rn <= ?
-        ORDER BY n.published_at DESC;
-      `).bind(timeAgo, offset, upperLimit).all<NewsRow>();
+        FROM page_news n
+        CROSS JOIN sources s ON n.source_id = s.id;
+      `).bind(fetchLimit, offset).all<NewsRow>();
 
-    return results ?? [];
-  });
+      const rows = results ?? [];
+      const hasMore = rows.length > limit;
+      return {
+        news: hasMore ? rows.slice(0, limit) : rows,
+        hasMore,
+      };
+    }
+  );
 }
 
 export async function fetchHotTopicsCached(
@@ -495,9 +499,9 @@ export async function fetchLatestBriefingsCached(
 // --- Routes ---
 
 uiRouter.get("/api/trends", async (_request, env, ctx) => {
-  const [hotTopics, news] = await Promise.all([
+  const [hotTopics, { news }] = await Promise.all([
     fetchHotTopicsCached(env, ctx),
-    fetchNewsCached(env, ctx, 24, 10, 1),
+    fetchNewsCached(env, ctx, 1, "latest"),
   ]);
 
   const latestBySource: Record<string, any[]> = {};
@@ -590,41 +594,26 @@ uiRouter.get("/search", async (request, env) => {
 
 uiRouter.get("/", async (request, env, ctx) => {
   const url = new URL(request.url);
-
   const user = await getSessionUser(request, env);
 
-  const queryPage = url.searchParams.get("page");
-  const queryLimit = url.searchParams.get("limit");
-  const queryTime = url.searchParams.get("time");
+  const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(Math.floor(rawPage), 100) : 1;
+  const sort: NewsSort = url.searchParams.get("sort") === "views" ? "views" : "latest";
 
-  const rawPage = parseInt(queryPage || "1", 10);
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
-  const prefLimit = getCookie(request, "pref_limit");
-  const rawLimit = parseInt(queryLimit || prefLimit || "10", 10);
-  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 50) : 10;
-  const rawTime = parseInt(queryTime || "24", 10);
-  const timeHours = Number.isFinite(rawTime) && rawTime > 0 ? Math.min(Math.floor(rawTime), 168) : 24;
-
-  const [news, hotTopics, latestBriefings] = await Promise.all([
-    fetchNewsCached(env, ctx, timeHours, limit, page),
+  const [{ news, hasMore }, hotTopics, latestBriefings] = await Promise.all([
+    fetchNewsCached(env, ctx, page, sort, HOME_PAGE_SIZE),
     fetchHotTopicsCached(env, ctx),
     fetchLatestBriefingsCached(env, ctx),
   ]);
 
-  const ranked = [...(news ?? [])].sort((a, b) => {
-    const dateA = new Date(a.published_at || a.created_at).getTime();
-    const dateB = new Date(b.published_at || b.created_at).getTime();
-    return dateB - dateA;
-  });
-
   const html = renderHomePage({
-    news: ranked,
+    news: news ?? [],
+    hasMore,
     hotTopics: hotTopics ?? [],
     latestBriefings: latestBriefings ?? [],
     user,
     page,
-    limit,
-    timeHours,
+    sort,
   });
 
   const response = new Response(html, {
@@ -633,10 +622,7 @@ uiRouter.get("/", async (request, env, ctx) => {
 
   const isLocalhost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
 
-  if (queryLimit) {
-    response.headers.append("Set-Cookie", `pref_limit=${limit}; Path=/; Max-Age=${60 * 60 * 24 * 365}`);
-    response.headers.set("Cache-Control", "private, no-cache");
-  } else if (user || isLocalhost) {
+  if (user || isLocalhost) {
     response.headers.set("Cache-Control", "private, no-cache");
   } else {
     response.headers.set("Cache-Control", PUBLIC_HTML_CACHE_CONTROL);
@@ -887,9 +873,21 @@ uiRouter.get(/^\/go\/(\d+)$/, async (request, env, ctx, match) => {
   const news = await env.DB.prepare("SELECT url FROM news WHERE id = ?").bind(newsId).first<{ url: string }>();
   if (!news) return new Response("Not Found", { status: 404 });
 
-  // Track click (async)
-  ctx.waitUntil(env.DB.prepare("INSERT INTO clicks (user_id, news_id) VALUES (?, ?)").bind(user?.id || null, newsId).run());
-  ctx.waitUntil(env.DB.prepare("UPDATE news SET view_count = view_count + 1 WHERE id = ?").bind(newsId).run());
+  // Track click (async) and refresh page 1 board caches
+  ctx.waitUntil(
+    (async () => {
+      try {
+        await Promise.all([
+          env.DB.prepare("INSERT INTO clicks (user_id, news_id) VALUES (?, ?)").bind(user?.id || null, newsId).run(),
+          env.DB.prepare("UPDATE news SET view_count = view_count + 1 WHERE id = ?").bind(newsId).run(),
+        ]);
+        await Promise.all([
+          invalidateEdgeCache(getNewsBoardCacheKey("latest", 1, HOME_PAGE_SIZE)),
+          invalidateEdgeCache(getNewsBoardCacheKey("views", 1, HOME_PAGE_SIZE)),
+        ]);
+      } catch {}
+    })()
+  );
 
   return new Response(null, { status: 302, headers: { Location: news.url } });
 });

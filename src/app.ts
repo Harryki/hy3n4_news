@@ -173,9 +173,9 @@ app.get("/llms.txt", async (_request, env, ctx) => {
 
 // AI Agent Discovery: /llms-full.txt (Full snapshot: Live Top 10 Hot Topics + Headlines by Press)
 app.get("/llms-full.txt", async (_request, env, ctx) => {
-  const [hotTopics, news] = await Promise.all([
+  const [hotTopics, { news }] = await Promise.all([
     fetchHotTopicsCached(env, ctx),
-    fetchNewsCached(env, ctx, 24, 10, 1),
+    fetchNewsCached(env, ctx, 1, "latest"),
   ]);
 
   const newsBySource: Record<string, any[]> = {};

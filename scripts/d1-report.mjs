@@ -231,7 +231,9 @@ function classifyQuery(sql) {
 
   if (s.includes("-- NEWS QUERY")) {
     let variant = "unknown";
-    if (s.includes("PARTITION BY +source_id")) {
+    if (s.includes("WITH page_news AS")) {
+      variant = "v3_board_20";
+    } else if (s.includes("PARTITION BY +source_id")) {
       variant = "v2_plus_source_id"; // dd72f60 & fc07821
     } else {
       variant = "v1_baseline"; // f2a7b70

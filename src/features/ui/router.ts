@@ -123,7 +123,7 @@ export function renderHomePage(opts: {
 }): string {
   const { news, hasMore, hotTopics, latestBriefings, user } = opts;
   const page = Number.isFinite(opts.page) && opts.page! > 0 ? Math.floor(opts.page!) : 1;
-  const sort: NewsSort = opts.sort === "views" ? "views" : "latest";
+  const sort: NewsSort = opts.sort === "latest" ? "latest" : "views";
   let content = "";
 
   if (hotTopics && hotTopics.length > 0) {
@@ -137,8 +137,8 @@ export function renderHomePage(opts: {
   content += renderNewsBoard(news, sort);
 
   const buildPageUrl = (targetPage: number) => {
-    if (sort === "views") {
-      return targetPage > 1 ? `/?sort=views&page=${targetPage}` : `/?sort=views`;
+    if (sort === "latest") {
+      return targetPage > 1 ? `/?sort=latest&page=${targetPage}` : `/?sort=latest`;
     }
     return targetPage > 1 ? `/?page=${targetPage}` : `/`;
   };
@@ -325,43 +325,77 @@ export function renderUserVotesPage(opts: { news: NewsRow[]; user: any }): strin
   });
 }
 
+let viewedIndexEnsured = false;
+
 export function getNewsBoardCacheKey(
-  sort: NewsSort = "latest",
+  sort: NewsSort = "views",
   page: number = 1,
   limit: number = HOME_PAGE_SIZE
 ): string {
-  return `https://hy3n4.news/__cache/d1/news-board/v2?sort=${sort}&page=${page}&limit=${limit}`;
+  return `https://hy3n4.news/__cache/d1/news-board/v3?sort=${sort}&page=${page}&limit=${limit}`;
 }
 
 export async function fetchNewsCached(
   env: Env,
   ctx: ExecutionContext | undefined,
   page: number = 1,
-  sort: NewsSort = "latest",
+  sort: NewsSort = "views",
   limit: number = HOME_PAGE_SIZE
-): Promise<{ news: NewsRow[]; hasMore: boolean }> {
+): Promise<{ news: NewsRow[]; hasMore: boolean; rowsRead?: number; durationMs?: number }> {
   const safePage = Math.min(Math.max(1, Math.floor(page)), 100);
   const offset = (safePage - 1) * limit;
   const fetchLimit = limit + 1;
   const newsCacheKey = getNewsBoardCacheKey(sort, safePage, limit);
 
-  return withEdgeCache<{ news: NewsRow[]; hasMore: boolean }>(
+  return withEdgeCache<{ news: NewsRow[]; hasMore: boolean; rowsRead?: number; durationMs?: number }>(
     newsCacheKey,
     EDGE_CACHE_TTL_SECONDS,
     ctx,
     async () => {
       if (sort === "views") {
-        // Hacker News style time-decay ranking over the last 24h (uses idx_news_feed_composite range scan)
+        if (!viewedIndexEnsured) {
+          viewedIndexEnsured = true;
+          try {
+            await env.DB.batch([
+              env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_news_viewed_recent ON news(published_at DESC) WHERE view_count > 0 OR upvotes > 0"),
+              env.DB.prepare("DROP INDEX IF EXISTS idx_news_views_published"),
+            ]);
+          } catch {}
+        }
+
+        // Hacker News style time-decay ranking over the last 24h:
+        // 1) viewed_recent scans ONLY clicked articles in 24h via partial index idx_news_viewed_recent
+        // 2) unviewed_recent reads at most (offset + fetchLimit) rows in index order via idx_news_feed_composite
         const timeAgo24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { results } = await env.DB.prepare(`
+        const { results, meta } = await env.DB.prepare(`
           -- NEWS QUERY
-          WITH page_news AS (
+          WITH viewed_recent AS (
               SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at,
-                     (CASE WHEN view_count > 0 THEN 1 ELSE 0 END) as has_views,
-                     ((view_count * 10.0 + upvotes * 3.0 + 1.0) / POW(MAX((julianday('now') - julianday(published_at)) * 24.0, 0.0) + 2.0, 1.5)) as hot_score
+                     1 as tier,
+                     ((view_count * 10.0 + upvotes * 3.0 + 1.0) / POW(MAX((julianday('now') - julianday(published_at)) * 24.0, 0.0) + 2.0, 1.5)) as sort_score
+              FROM news
+              WHERE (view_count > 0 OR upvotes > 0)
+                AND published_at >= ?
+          ),
+          unviewed_recent AS (
+              SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at,
+                     0 as tier,
+                     0.0 as sort_score
               FROM news
               WHERE published_at >= ?
-              ORDER BY has_views DESC, hot_score DESC, published_at DESC
+                AND view_count = 0 AND upvotes = 0
+              ORDER BY published_at DESC, created_at DESC
+              LIMIT ?
+          ),
+          combined AS (
+              SELECT * FROM viewed_recent
+              UNION ALL
+              SELECT * FROM unviewed_recent
+          ),
+          page_news AS (
+              SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at
+              FROM combined
+              ORDER BY tier DESC, sort_score DESC, published_at DESC, created_at DESC
               LIMIT ? OFFSET ?
           )
           SELECT 
@@ -373,17 +407,19 @@ export async function fetchNewsCached(
                WHERE nt.news_id = n.id) as keywords
           FROM page_news n
           CROSS JOIN sources s ON n.source_id = s.id;
-        `).bind(timeAgo24h, fetchLimit, offset).all<NewsRow>();
+        `).bind(timeAgo24h, timeAgo24h, offset + fetchLimit, fetchLimit, offset).all<NewsRow>();
 
         const rows = results ?? [];
         const hasMore = rows.length > limit;
         return {
           news: hasMore ? rows.slice(0, limit) : rows,
           hasMore,
+          rowsRead: meta?.rows_read,
+          durationMs: meta?.duration,
         };
       }
 
-      const { results } = await env.DB.prepare(`
+      const { results, meta } = await env.DB.prepare(`
         -- NEWS QUERY
         WITH page_news AS (
             SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at
@@ -407,6 +443,8 @@ export async function fetchNewsCached(
       return {
         news: hasMore ? rows.slice(0, limit) : rows,
         hasMore,
+        rowsRead: meta?.rows_read,
+        durationMs: meta?.duration,
       };
     }
   );
@@ -626,9 +664,9 @@ uiRouter.get("/", async (request, env, ctx) => {
 
   const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.min(Math.floor(rawPage), 100) : 1;
-  const sort: NewsSort = url.searchParams.get("sort") === "views" ? "views" : "latest";
+  const sort: NewsSort = url.searchParams.get("sort") === "latest" ? "latest" : "views";
 
-  const [{ news, hasMore }, hotTopics, latestBriefings] = await Promise.all([
+  const [{ news, hasMore, rowsRead, durationMs }, hotTopics, latestBriefings] = await Promise.all([
     fetchNewsCached(env, ctx, page, sort, HOME_PAGE_SIZE),
     fetchHotTopicsCached(env, ctx),
     fetchLatestBriefingsCached(env, ctx),
@@ -647,6 +685,13 @@ uiRouter.get("/", async (request, env, ctx) => {
   const response = new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   });
+
+  if (typeof rowsRead === "number") {
+    response.headers.set(
+      "Server-Timing",
+      `d1-news;desc="rows_read=${rowsRead}";dur=${Number(durationMs || 0).toFixed(2)}`
+    );
+  }
 
   const isLocalhost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
 

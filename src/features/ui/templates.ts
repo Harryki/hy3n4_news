@@ -419,7 +419,7 @@ export function renderHTML(
 }
 
 
-export function renderNewsBoard(news: any[], sort: "latest" | "views" = "latest"): string {
+export function renderNewsBoard(news: any[], sort: "latest" | "views" = "views"): string {
   let rowsHtml = "";
 
   if (!news || news.length === 0) {
@@ -469,8 +469,8 @@ export function renderNewsBoard(news: any[], sort: "latest" | "views" = "latest"
       <div class="board-toolbar">
         <h2 class="board-heading">전체 뉴스</h2>
         <div class="blog-sort-tabs" role="tablist" aria-label="뉴스 정렬">
-          <a href="/" class="blog-sort-tab ${sort === "latest" ? "active" : ""}">최신순</a>
-          <a href="/?sort=views" class="blog-sort-tab ${sort === "views" ? "active" : ""}">인기순</a>
+          <a href="/" class="blog-sort-tab ${sort === "views" ? "active" : ""}">인기순</a>
+          <a href="/?sort=latest" class="blog-sort-tab ${sort === "latest" ? "active" : ""}">최신순</a>
         </div>
       </div>
       <div class="board-table-head" aria-hidden="true">

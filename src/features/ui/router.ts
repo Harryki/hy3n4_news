@@ -330,7 +330,7 @@ export function getNewsBoardCacheKey(
   page: number = 1,
   limit: number = HOME_PAGE_SIZE
 ): string {
-  return `https://hy3n4.news/__cache/d1/news-board/v1?sort=${sort}&page=${page}&limit=${limit}`;
+  return `https://hy3n4.news/__cache/d1/news-board/v2?sort=${sort}&page=${page}&limit=${limit}`;
 }
 
 export async function fetchNewsCached(
@@ -350,17 +350,45 @@ export async function fetchNewsCached(
     EDGE_CACHE_TTL_SECONDS,
     ctx,
     async () => {
-      const orderByClause =
-        sort === "views"
-          ? "view_count DESC, published_at DESC, created_at DESC"
-          : "published_at DESC, created_at DESC";
+      if (sort === "views") {
+        // Hacker News style time-decay ranking over the last 24h (uses idx_news_feed_composite range scan)
+        const timeAgo24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { results } = await env.DB.prepare(`
+          -- NEWS QUERY
+          WITH page_news AS (
+              SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at,
+                     (CASE WHEN view_count > 0 THEN 1 ELSE 0 END) as has_views,
+                     ((view_count * 10.0 + upvotes * 3.0 + 1.0) / POW(MAX((julianday('now') - julianday(published_at)) * 24.0, 0.0) + 2.0, 1.5)) as hot_score
+              FROM news
+              WHERE published_at >= ?
+              ORDER BY has_views DESC, hot_score DESC, published_at DESC
+              LIMIT ? OFFSET ?
+          )
+          SELECT 
+              n.id, n.title, n.url, '' as description, n.upvotes, n.view_count, n.published_at, n.created_at, 
+              s.name as source_name,
+              (SELECT group_concat(t.keywords, ', ') 
+               FROM news_topics nt 
+               JOIN topics t ON nt.topic_id = t.id 
+               WHERE nt.news_id = n.id) as keywords
+          FROM page_news n
+          CROSS JOIN sources s ON n.source_id = s.id;
+        `).bind(timeAgo24h, fetchLimit, offset).all<NewsRow>();
+
+        const rows = results ?? [];
+        const hasMore = rows.length > limit;
+        return {
+          news: hasMore ? rows.slice(0, limit) : rows,
+          hasMore,
+        };
+      }
 
       const { results } = await env.DB.prepare(`
         -- NEWS QUERY
         WITH page_news AS (
             SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at
             FROM news
-            ORDER BY ${orderByClause}
+            ORDER BY published_at DESC, created_at DESC
             LIMIT ? OFFSET ?
         )
         SELECT 

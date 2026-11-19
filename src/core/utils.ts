@@ -98,6 +98,45 @@ export function formatKstShortTime(utcStr: string | null | undefined): string {
   return `${mm}/${dd} ${hh}:${min}`;
 }
 
+const BOT_UA_REGEX =
+  /bot|crawl|spider|slurp|archiver|scrap|curl|wget|python|aiohttp|httpx|axios|node-fetch|undici|go-http-client|java|okhttp|libwww|perl|ruby|php|headless|phantom|puppeteer|playwright|selenium|facebookexternalhit|facebot|mediapartners|adsbot|apis-google|googleother|google-inspectiontool|google-extended|bingpreview|bytespider|gptbot|oai-searchbot|chatgpt|claudebot|anthropic|perplexity|ccbot|yandex|baiduspider|duckduckbot|sogou|exabot|ia_archiver|semrush|ahrefs|mj12bot|dotbot|petalbot|applebot|yeti|daum|naverbot|kakaotalk-scrap|telegrambot|twitterbot|discordbot|slackbot|whatsapp|linkedinbot/i;
+
+/**
+ * Checks if a request is a genuine human top-level browser navigation
+ * (filters out bots, crawlers, headless scrapers, and link prefetchers).
+ */
+export function isHumanBrowserNavigation(request: Request): boolean {
+  if (request.method !== "GET") return false;
+
+  const ua = request.headers.get("user-agent") || "";
+  if (!ua.includes("Mozilla/5.0") || BOT_UA_REGEX.test(ua)) {
+    return false;
+  }
+
+  const accept = request.headers.get("accept") || "";
+  if (!accept.includes("text/html")) {
+    return false;
+  }
+
+  const purpose = (
+    request.headers.get("sec-purpose") ||
+    request.headers.get("purpose") ||
+    request.headers.get("x-purpose") ||
+    request.headers.get("x-moz") ||
+    ""
+  ).toLowerCase();
+  if (purpose.includes("prefetch") || purpose.includes("preview") || purpose.includes("prerender")) {
+    return false;
+  }
+
+  const secFetchMode = request.headers.get("sec-fetch-mode");
+  if (secFetchMode && secFetchMode !== "navigate") {
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Validates ?key=CRON_SECRET on protected admin/cron endpoints.
  */

@@ -1,6 +1,6 @@
 import { Router } from "../../core/router";
 import { getSessionUser } from "../../auth";
-import { isAuthorizedCronRequest } from "../../core/utils";
+import { isAuthorizedCronRequest, isHumanBrowserNavigation } from "../../core/utils";
 import { HOME_BRIEFINGS_CACHE_KEY, invalidateEdgeCache } from "../../core/cache";
 import { renderHTML } from "../ui/templates";
 import {
@@ -128,8 +128,7 @@ blogRouter.get("/blog/:slug", async (request, env, ctx, match) => {
   if (prevPost) prevPost.title = stripBlogDatePrefix(prevPost.title);
   if (nextPost) nextPost.title = stripBlogDatePrefix(nextPost.title);
 
-  const ua = request.headers.get("user-agent") || "";
-  if (request.method === "GET" && !/bot|crawl|spider|slurp|facebookexternalhit|mediapartners/i.test(ua)) {
+  if (isHumanBrowserNavigation(request)) {
     post.view_count = (post.view_count || 0) + 1;
     ctx.waitUntil(
       (async () => {

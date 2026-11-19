@@ -1,6 +1,6 @@
 import { Router } from "../../core/router";
 import { Env, getSessionUser } from "../../auth";
-import { getRelativeTime } from "../../core/utils";
+import { getRelativeTime, isHumanBrowserNavigation } from "../../core/utils";
 import {
   EDGE_CACHE_TTL_SECONDS,
   PUBLIC_HTML_CACHE_CONTROL,
@@ -945,26 +945,24 @@ uiRouter.get("/legal", async (request, env) => {
 
 uiRouter.get(/^\/go\/(\d+)$/, async (request, env, ctx, match) => {
   const newsId = parseInt(match![1], 10);
-  const user = await getSessionUser(request, env);
 
   const news = await env.DB.prepare("SELECT url FROM news WHERE id = ?").bind(newsId).first<{ url: string }>();
   if (!news) return new Response("Not Found", { status: 404 });
 
-  // Track click (async) and refresh page 1 board caches
-  ctx.waitUntil(
-    (async () => {
-      try {
-        await Promise.all([
-          env.DB.prepare("INSERT INTO clicks (user_id, news_id) VALUES (?, ?)").bind(user?.id || null, newsId).run(),
-          env.DB.prepare("UPDATE news SET view_count = view_count + 1 WHERE id = ?").bind(newsId).run(),
-        ]);
-        await Promise.all([
-          invalidateEdgeCache(getNewsBoardCacheKey("latest", 1, HOME_PAGE_SIZE)),
-          invalidateEdgeCache(getNewsBoardCacheKey("views", 1, HOME_PAGE_SIZE)),
-        ]);
-      } catch {}
-    })()
-  );
+  // Only increment view_count and invalidate board cache for genuine human browser navigations
+  if (isHumanBrowserNavigation(request)) {
+    ctx.waitUntil(
+      (async () => {
+        try {
+          await env.DB.prepare("UPDATE news SET view_count = view_count + 1 WHERE id = ?").bind(newsId).run();
+          await Promise.all([
+            invalidateEdgeCache(getNewsBoardCacheKey("latest", 1, HOME_PAGE_SIZE)),
+            invalidateEdgeCache(getNewsBoardCacheKey("views", 1, HOME_PAGE_SIZE)),
+          ]);
+        } catch {}
+      })()
+    );
+  }
 
   return new Response(null, { status: 302, headers: { Location: news.url } });
 });

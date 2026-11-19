@@ -85,7 +85,6 @@ function parseRSS(xmlData: string, sourceName: string) {
 }
 
 export async function performRSSFetch(env: Env): Promise<void> {
-  const startTime = Date.now();
   console.log(`[CRON] ========== RSS fetch started at ${new Date().toISOString()} ==========`);
 
   const { results: sources } = await env.DB.prepare(

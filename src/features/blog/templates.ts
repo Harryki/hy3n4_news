@@ -1,7 +1,5 @@
 import { BlogPostRecord } from "./service";
-import { escapeHtml, formatUtcToKst } from "../../core/utils";
-
-export { escapeHtml, formatUtcToKst };
+import { escapeHtml, formatUtcToKst, toIsoUtcString } from "../../core/utils";
 
 /**
  * Lightweight, safe Markdown to HTML converter tailored for news blog posts.
@@ -300,9 +298,7 @@ export function buildBlogListJsonLd(posts: BlogPostRecord[], page: number = 1) {
 
 export function buildBlogPostJsonLd(post: BlogPostRecord) {
   const postUrl = `https://hy3n4.news/blog/${encodeURIComponent(post.slug)}`;
-  const isoPub = post.published_at.endsWith("Z")
-    ? post.published_at
-    : `${post.published_at.replace(" ", "T")}Z`;
+  const isoPub = toIsoUtcString(post.published_at);
 
   let keywordsList: string[] = [];
   try {

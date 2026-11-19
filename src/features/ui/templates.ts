@@ -553,7 +553,7 @@ export function renderHyenaBriefing(
   `;
 }
 
-export function renderPagination(opts: { page: number; hasMore: boolean; prevUrl: string | null; nextUrl: string | null; firstUrl: string | null }): string {
+export function renderPagination(opts: { page: number; prevUrl: string | null; nextUrl: string | null; firstUrl: string | null }): string {
   const { page, prevUrl, nextUrl, firstUrl } = opts;
   // No pagination needed on single page without prev/next
   if (!prevUrl && !nextUrl) return '';
@@ -602,7 +602,7 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
     if (page > 1) {
       const prevUrl = query ? `/search?q=${encodeURIComponent(query)}&page=${page - 1}` : `/search?page=${page - 1}`;
       const firstUrl = query ? `/search?q=${encodeURIComponent(query)}&page=1` : `/search?page=1`;
-      html += renderPagination({ page, hasMore: false, prevUrl, nextUrl: null, firstUrl });
+      html += renderPagination({ page, prevUrl, nextUrl: null, firstUrl });
     }
   } else {
     for (const topic of topics) {
@@ -636,7 +636,7 @@ export function renderSearchResults(query: string | null, topics: any[], newsByT
     const firstUrl = page > 1
       ? (query ? `/search?q=${encodeURIComponent(query)}&page=1` : `/search?page=1`)
       : null;
-    html += renderPagination({ page, hasMore, prevUrl, nextUrl, firstUrl });
+    html += renderPagination({ page, prevUrl, nextUrl, firstUrl });
   }
 
   html += '</div>';

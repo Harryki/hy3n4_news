@@ -1,6 +1,6 @@
 import { Env } from "../../auth";
 import { HOME_BRIEFINGS_CACHE_KEY, invalidateEdgeCache } from "../../core/cache";
-import { parseTopicMilestones, TopicMilestonesData } from "../ai/queue";
+import { parseTopicMilestones } from "../ai/queue";
 
 export type BlogSlot = "morning" | "afternoon" | "evening";
 

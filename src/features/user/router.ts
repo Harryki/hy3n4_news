@@ -1,5 +1,5 @@
 import { Router } from "../../core/router";
-import { Env, getSessionUser, handleLogin, handleCallback, handleLogout } from "../../auth";
+import { getSessionUser, handleLogin, handleCallback, handleLogout } from "../../auth";
 import { getCookie } from "../../core/utils";
 
 export const userRouter = new Router();

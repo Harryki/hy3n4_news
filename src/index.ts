@@ -47,7 +47,7 @@ export default {
     }
   },
 
-  async queue(batch: MessageBatch<any>, env: Env, ctx: ExecutionContext): Promise<void> {
+  async queue(batch: MessageBatch<any>, env: Env, _ctx: ExecutionContext): Promise<void> {
     await processNewsQueue(batch.messages as any[], env);
   },
 };

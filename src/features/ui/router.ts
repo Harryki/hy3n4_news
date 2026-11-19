@@ -145,7 +145,7 @@ export function renderHomePage(opts: {
   const prevUrl = page > 1 ? buildPageUrl(page - 1) : null;
   const nextUrl = hasMore ? buildPageUrl(page + 1) : null;
   const firstUrl = page > 1 ? buildPageUrl(1) : null;
-  content += renderPagination({ page, hasMore, prevUrl, nextUrl, firstUrl });
+  content += renderPagination({ page, prevUrl, nextUrl, firstUrl });
 
   const topTopicTitles = (hotTopics || []).slice(0, 4).map((t) => t.title).filter(Boolean);
   const homeDescription =
@@ -252,7 +252,6 @@ export function renderTopicDetailPage(opts: {
   const topicFirstUrl = page > 1 ? `/topic/${topic.id}?page=1` : null;
   content += renderPagination({
     page,
-    hasMore: topicHasMore,
     prevUrl: topicPrevUrl,
     nextUrl: topicNextUrl,
     firstUrl: topicFirstUrl,
@@ -311,8 +310,6 @@ export function renderTopicDetailPage(opts: {
   return renderHTML(content, user?.username || null, seo);
 }
 
-let viewedIndexEnsured = false;
-
 export function getNewsBoardCacheKey(
   sort: NewsSort = "views",
   page: number = 1,
@@ -339,22 +336,6 @@ export async function fetchNewsCached(
     ctx,
     async () => {
       if (sort === "views") {
-        if (!viewedIndexEnsured) {
-          viewedIndexEnsured = true;
-          try {
-            await env.DB.batch([
-              env.DB.prepare(
-                "CREATE INDEX IF NOT EXISTS idx_news_hot_covering ON news(published_at DESC, view_count, created_at) WHERE view_count > 0"
-              ),
-              env.DB.prepare("DROP INDEX IF EXISTS idx_news_viewed_recent"),
-              env.DB.prepare("DROP INDEX IF EXISTS idx_news_views_published"),
-              env.DB.prepare("DROP INDEX IF EXISTS idx_news_upvotes_created"),
-              env.DB.prepare("DROP INDEX IF EXISTS idx_news_source"),
-              env.DB.prepare("DROP INDEX IF EXISTS idx_clicks_news"),
-            ]);
-          } catch {}
-        }
-
         // Hacker News style time-decay ranking over the last 24h:
         // 1) viewed_recent scans ONLY clicked articles in 24h via covering partial index idx_news_hot_covering (zero table lookups during scoring)
         // 2) unviewed_recent reads at most (offset + fetchLimit) rows in index order via idx_news_feed_composite

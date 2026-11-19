@@ -111,14 +111,6 @@ export class Router {
     this.addRoute("POST", pattern, handler);
   }
 
-  public head(pattern: string | RegExp, handler: RouteHandler) {
-    this.addRoute("HEAD", pattern, handler);
-  }
-
-  public any(pattern: string | RegExp, handler: RouteHandler) {
-    this.addRoute("ANY", pattern, handler);
-  }
-
   private addRoute(method: string, pattern: string | RegExp, handler: RouteHandler) {
     const compiledRegex =
       typeof pattern === "string" ? compilePathPattern(pattern) : pattern;
@@ -141,13 +133,6 @@ export class Router {
    */
   public notFound(handler: RouteHandler) {
     this.notFoundHandler = handler;
-  }
-
-  /**
-   * Registers a custom global error handler.
-   */
-  public onError(handler: ErrorHandler) {
-    this.errorHandler = handler;
   }
 
   private matchRoute(method: string, pathname: string): { route: Route; match?: RegExpMatchArray } | null {

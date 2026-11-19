@@ -1,8 +1,6 @@
 import { Router } from "../../core/router";
 import { Env } from "../../auth";
 import {
-  escapeHtml,
-  getRelativeTime,
   isAuthorizedCronRequest,
   sendQueueWithRetry,
 } from "../../core/utils";
@@ -17,7 +15,7 @@ export interface HybridSearchResult {
 
 /**
  * Shared Hybrid Topic Search (Semantic Vectorize + Keyword LIKE + Latest fallback).
- * Used by both GET /search (full SSR page) and GET /api/search (HTMX dropdown partial).
+ * Used by both GET /search (full SSR page) and GET /api/search (JSON API).
  */
 export async function searchTopicsHybrid(
   env: Env,
@@ -117,121 +115,46 @@ export async function searchTopicsHybrid(
   return { topics, newsByTopic, hasMore };
 }
 
-// --- Search Results HTML Rendering (HTMX partial) ---
-
-function renderSearchEmpty(query: string): string {
-  return `
-        <div class="search-results-container">
-            <div class="search-results-header">
-                <span>"<strong>${escapeHtml(query)}</strong>" 검색 결과가 없습니다</span>
-                <button onclick="document.getElementById('search-results').innerHTML=''" class="search-close-btn">✕</button>
-            </div>
-            <p style="padding: 20px; color: #828282; text-align: center;">다른 키워드로 검색해보세요.</p>
-        </div>`;
-}
-
-function renderTopicGroups(topics: any[], newsByTopic: Record<number, any[]>): string {
-  let html = "";
-  for (const topic of topics) {
-    const topicNews = newsByTopic[topic.id as number] || [];
-    const updateTimeStr = topic.updated_at ? getRelativeTime(topic.updated_at, topic.updated_at) : "";
-    const articleCount = topic.article_count || 0;
-    const countStr = articleCount > 0 ? `(기사 ${articleCount}개) · ` : "";
-    const updateInfo =
-      countStr || updateTimeStr
-        ? `<span class="search-news-meta" style="margin-left: 8px;">${countStr}마지막 업데이트: ${updateTimeStr}</span>`
-        : "";
-
-    html += `
-            <div class="search-topic-group">
-                <a href="/topic/${topic.id}" class="search-topic-title">${escapeHtml(topic.title as string)}</a>
-                ${updateInfo}
-                ${
-                  topic.keywords
-                    ? `<span class="search-topic-keywords">#${(topic.keywords as string)
-                        .split(",")
-                        .map((k: string) => k.trim())
-                        .join(" #")}</span>`
-                    : ""
-                }
-                ${
-                  topicNews.length > 0
-                    ? `<ul class="search-news-list">
-                    ${topicNews
-                      .map((n) => {
-                        const timeStr = getRelativeTime(n.published_at, n.created_at);
-                        return `<li><a href="/go/${n.id}" target="_blank" class="search-news-link">${escapeHtml(
-                          n.title as string
-                        )}</a> <span class="search-news-meta">${n.source_name} · ${timeStr}</span></li>`;
-                      })
-                      .join("")}
-                </ul>`
-                    : ""
-                }
-            </div>`;
-  }
-  return html;
-}
-
-function renderLoadMoreButton(query: string, nextPage: number): string {
-  return `<div id="search-load-more" style="text-align: center; padding: 20px; border-top: 1px solid var(--border);">
-        <a hx-get="/api/search?q=${encodeURIComponent(query)}&page=${nextPage}" hx-target="#search-load-more" hx-swap="outerHTML" rel="next"
-           style="display: inline-block; padding: 10px 20px; background: var(--accent); color: var(--bg); text-decoration: none; border-radius: 20px; font-weight: bold; cursor: pointer;">
-           더 보기
-        </a>
-    </div>`;
-}
-
-function renderSearchResultsPartial(
-  query: string,
-  topics: any[],
-  newsByTopic: Record<number, any[]>,
-  hasMore: boolean,
-  page: number
-): string {
-  // Page > 1: return only the topic groups + optional load-more button (for HTMX append)
-  if (page > 1) {
-    let html = renderTopicGroups(topics, newsByTopic);
-    if (hasMore) html += renderLoadMoreButton(query, page + 1);
-    return html;
-  }
-
-  // Page 1: full container with header
-  let html = `
-        <div class="search-results-container">
-            <div class="search-results-header">
-                <span>"<strong>${escapeHtml(query)}</strong>" 관련 토픽 검색 결과</span>
-                <button onclick="document.getElementById('search-results').innerHTML=''" class="search-close-btn">✕</button>
-            </div>`;
-
-  html += renderTopicGroups(topics, newsByTopic);
-  if (hasMore) html += renderLoadMoreButton(query, page + 1);
-  html += `</div>`;
-  return html;
-}
-
-// --- GET /api/search : Hybrid Topic Search (Semantic + Keyword) ---
+// --- GET /api/search : Hybrid Topic Search JSON API (Semantic + Keyword) ---
 aiRouter.get("/api/search", async (request, env) => {
   const url = new URL(request.url);
-  const q = url.searchParams.get("q")?.trim();
-  if (!q) return new Response("", { status: 200 });
-
+  const q = url.searchParams.get("q")?.trim() || null;
   const rawPage = parseInt(url.searchParams.get("page") || "1", 10);
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
 
-  const { topics, newsByTopic, hasMore } = await searchTopicsHybrid(env, q, page, 20, true);
+  const { topics, newsByTopic, hasMore } = await searchTopicsHybrid(env, q, page, 20, Boolean(q));
 
-  if (topics.length === 0) {
-    if (page === 1) {
-      return new Response(renderSearchEmpty(q), {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
-    }
-    return new Response("", { status: 200 });
-  }
+  const payload = {
+    query: q,
+    page,
+    has_more: hasMore,
+    topics: topics.map((t: any) => ({
+      id: t.id,
+      title: t.title,
+      keywords: t.keywords
+        ? String(t.keywords)
+            .split(",")
+            .map((k: string) => k.trim())
+            .filter(Boolean)
+        : [],
+      article_count: t.article_count || 0,
+      updated_at: t.updated_at,
+      url: `https://hy3n4.news/topic/${t.id}`,
+      articles: (newsByTopic[t.id] || []).map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        source_name: n.source_name,
+        published_at: n.published_at || n.created_at,
+        url: n.url,
+      })),
+    })),
+  };
 
-  return new Response(renderSearchResultsPartial(q, topics, newsByTopic, hasMore, page), {
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+  return new Response(JSON.stringify(payload, null, 2), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+    },
   });
 });
 

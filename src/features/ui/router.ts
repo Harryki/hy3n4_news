@@ -30,7 +30,6 @@ export interface NewsRow {
   title: string;
   url: string;
   description: string;
-  upvotes: number;
   view_count: number;
   published_at: string;
   created_at: string;
@@ -312,19 +311,6 @@ export function renderTopicDetailPage(opts: {
   return renderHTML(content, user?.username || null, seo);
 }
 
-export function renderUserVotesPage(opts: { news: NewsRow[]; user: any }): string {
-  const { news, user } = opts;
-  const content =
-    `<h2 style="padding: 20px 0; max-width: 800px; margin: 0 auto; color: var(--border); border-bottom: 2px solid var(--accent); padding-bottom: 12px; font-size: 22px; margin-bottom: 24px;">투표한 기사</h2>` +
-    renderWideNewsList(news);
-
-  return renderHTML(content, user?.username || null, {
-    title: "투표한 기사 | 하이에나뉴스",
-    noindex: true,
-    hasFeedback: Boolean(user?.has_feedback),
-  });
-}
-
 let viewedIndexEnsured = false;
 
 export function getNewsBoardCacheKey(
@@ -332,7 +318,7 @@ export function getNewsBoardCacheKey(
   page: number = 1,
   limit: number = HOME_PAGE_SIZE
 ): string {
-  return `https://hy3n4.news/__cache/d1/news-board/v4?sort=${sort}&page=${page}&limit=${limit}`;
+  return `https://hy3n4.news/__cache/d1/news-board/v5?sort=${sort}&page=${page}&limit=${limit}`;
 }
 
 export async function fetchNewsCached(
@@ -358,10 +344,13 @@ export async function fetchNewsCached(
           try {
             await env.DB.batch([
               env.DB.prepare(
-                "CREATE INDEX IF NOT EXISTS idx_news_hot_covering ON news(published_at DESC, view_count, upvotes, created_at) WHERE view_count > 0"
+                "CREATE INDEX IF NOT EXISTS idx_news_hot_covering ON news(published_at DESC, view_count, created_at) WHERE view_count > 0"
               ),
               env.DB.prepare("DROP INDEX IF EXISTS idx_news_viewed_recent"),
               env.DB.prepare("DROP INDEX IF EXISTS idx_news_views_published"),
+              env.DB.prepare("DROP INDEX IF EXISTS idx_news_upvotes_created"),
+              env.DB.prepare("DROP INDEX IF EXISTS idx_news_source"),
+              env.DB.prepare("DROP INDEX IF EXISTS idx_clicks_news"),
             ]);
           } catch {}
         }
@@ -375,7 +364,7 @@ export async function fetchNewsCached(
           WITH viewed_recent AS (
               SELECT id, published_at, created_at,
                      1 as tier,
-                     ((view_count * 10.0 + upvotes * 3.0 + 1.0) / POW(MAX((julianday('now') - julianday(published_at)) * 24.0, 0.0) + 2.0, 1.5)) as sort_score
+                     ((view_count * 10.0 + 1.0) / POW(MAX((julianday('now') - julianday(published_at)) * 24.0, 0.0) + 2.0, 1.5)) as sort_score
               FROM news INDEXED BY idx_news_hot_covering
               WHERE view_count > 0
                 AND published_at >= ?
@@ -402,7 +391,7 @@ export async function fetchNewsCached(
               LIMIT ? OFFSET ?
           )
           SELECT 
-              n.id, n.title, n.url, '' as description, n.upvotes, n.view_count, n.published_at, n.created_at, 
+              n.id, n.title, n.url, '' as description, n.view_count, n.published_at, n.created_at, 
               s.name as source_name,
               (SELECT group_concat(t.keywords, ', ') 
                FROM news_topics nt 
@@ -426,13 +415,13 @@ export async function fetchNewsCached(
       const { results, meta } = await env.DB.prepare(`
         -- NEWS QUERY
         WITH page_news AS (
-            SELECT id, source_id, title, url, upvotes, view_count, published_at, created_at
+            SELECT id, source_id, title, url, view_count, published_at, created_at
             FROM news
             ORDER BY published_at DESC, created_at DESC
             LIMIT ? OFFSET ?
         )
         SELECT 
-            n.id, n.title, n.url, '' as description, n.upvotes, n.view_count, n.published_at, n.created_at, 
+            n.id, n.title, n.url, '' as description, n.view_count, n.published_at, n.created_at, 
             s.name as source_name,
             (SELECT group_concat(t.keywords, ', ') 
              FROM news_topics nt 
@@ -732,7 +721,7 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
     }
 
     const { results: rawNews } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.description, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name
+        SELECT n.id, n.title, n.url, n.description, n.view_count, n.published_at, n.created_at, s.name as source_name
         FROM news_topics nt
         JOIN news n ON n.id = nt.news_id
         CROSS JOIN sources s ON n.source_id = s.id
@@ -881,25 +870,6 @@ uiRouter.get(/^\/topic\/(\d+)$/, async (request, env, ctx, match) => {
       "Vary": "Cookie",
     },
   });
-});
-
-uiRouter.get("/user", async (request, env) => {
-  const user = await getSessionUser(request, env);
-  if (!user) return new Response(null, { status: 302, headers: { Location: "/login" } });
-
-  const { results: news } = await env.DB.prepare(`
-        SELECT n.id, n.title, n.url, n.upvotes, n.view_count, n.published_at, n.created_at, s.name as source_name,
-               (SELECT group_concat(t.keywords, ', ') FROM news_topics nt JOIN topics t ON nt.topic_id = t.id WHERE nt.news_id = n.id) as keywords
-        FROM news n
-        JOIN votes v ON n.id = v.news_id
-        JOIN sources s ON n.source_id = s.id
-        WHERE v.user_id = ?
-        ORDER BY v.created_at DESC
-        LIMIT 100
-    `).bind(user.id).all<NewsRow>();
-
-  const html = renderUserVotesPage({ news: news ?? [], user });
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
 });
 
 uiRouter.get("/guidelines", async (request, env) => {

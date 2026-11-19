@@ -72,7 +72,6 @@ export function renderHTML(
   <link rel="stylesheet" href="/styles.css?v=2">
 
   <script type="application/ld+json">${jsonLdScript}</script>
-  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-214JZWY0K5"></script>
   <script>
@@ -84,11 +83,6 @@ export function renderHTML(
   </script>
 </head>
 <body>
-  <script>
-    document.addEventListener('htmx:responseError', function(e) {
-      if (e.detail.xhr.status === 401) { window.location.href = '/login'; }
-    });
-  </script>
   <div class="app-container">
     <header class="site-header">
       <h1>
@@ -277,14 +271,6 @@ export function renderHTML(
           if (localStorage.getItem('hy3n4_fb_done') === '1') return true;
         } catch (e) {}
         return window.__HY3N4_FB_DONE || hasCookie('hy3n4_fb_done');
-      };
-
-      const isFbSnoozed = () => {
-        try {
-          const until = parseInt(localStorage.getItem('hy3n4_fb_snooze_until') || '0', 10);
-          if (until > Date.now()) return true;
-        } catch (e) {}
-        return hasCookie('hy3n4_fb_snooze');
       };
 
       const openFeedbackModal = () => {

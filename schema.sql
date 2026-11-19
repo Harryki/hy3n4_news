@@ -14,7 +14,6 @@ CREATE TABLE IF NOT EXISTS news (
   title TEXT NOT NULL,
   url TEXT NOT NULL UNIQUE,
   description TEXT,
-  upvotes INTEGER NOT NULL DEFAULT 0,
   view_count INTEGER NOT NULL DEFAULT 0,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -35,26 +34,6 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id INTEGER NOT NULL,
   expires_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
--- Votes: one vote per user per news item
-CREATE TABLE IF NOT EXISTS votes (
-  user_id INTEGER NOT NULL,
-  news_id INTEGER NOT NULL,
-  vote_type INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (user_id, news_id),
-  FOREIGN KEY (user_id) REFERENCES users(id),
-  FOREIGN KEY (news_id) REFERENCES news(id)
-);
-
--- Click tracking
-CREATE TABLE IF NOT EXISTS clicks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  news_id INTEGER NOT NULL,
-  clicked_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (news_id) REFERENCES news(id)
 );
 
 -- Clustering: Topics
@@ -85,7 +64,7 @@ CREATE TABLE IF NOT EXISTS news_topics (
 CREATE INDEX IF NOT EXISTS idx_news_feed_composite ON news(published_at DESC, created_at DESC);
 
 -- Covering partial index for Popular/Hot feed (only indexes articles with view_count > 0)
-CREATE INDEX IF NOT EXISTS idx_news_hot_covering ON news(published_at DESC, view_count, upvotes, created_at) WHERE view_count > 0;
+CREATE INDEX IF NOT EXISTS idx_news_hot_covering ON news(published_at DESC, view_count, created_at) WHERE view_count > 0;
 
 -- Handles the Keyword Search sort (ORDER BY COALESCE)
 -- This is a functional index supported by D1 (SQLite)
@@ -99,11 +78,6 @@ CREATE INDEX IF NOT EXISTS idx_news_topics_news_topic ON news_topics(news_id, to
 
 -- Covering Index for Topic Discovery (WHERE updated_at / SELECT id, title)
 CREATE INDEX IF NOT EXISTS idx_topics_recent_full ON topics(updated_at DESC, id, title);
-
--- Existing essentials to keep
-CREATE INDEX IF NOT EXISTS idx_news_upvotes_created ON news(upvotes DESC, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_news_source ON news(source_id);
-CREATE INDEX IF NOT EXISTS idx_clicks_news ON clicks(news_id);
 
 -- User Feedbacks: Survey popup responses
 CREATE TABLE IF NOT EXISTS feedbacks (

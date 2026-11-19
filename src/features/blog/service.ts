@@ -56,53 +56,11 @@ export function stripBlogDatePrefix(title: string): string {
     .trim();
 }
 
-let blogTableInitialized = false;
-
-/**
- * Ensures blog_posts table and indexes exist in D1 (called before publishing new posts).
- */
-export async function ensureBlogTable(db: D1Database): Promise<void> {
-  if (blogTableInitialized) return;
-
-  await db.batch([
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS blog_posts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        slug TEXT UNIQUE NOT NULL,
-        title TEXT NOT NULL,
-        summary TEXT NOT NULL,
-        content TEXT NOT NULL,
-        topics_data TEXT,
-        target_date TEXT UNIQUE NOT NULL,
-        view_count INTEGER NOT NULL DEFAULT 0,
-        published_at TEXT NOT NULL DEFAULT (datetime('now')),
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-    `),
-    db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published_at DESC);
-    `),
-  ]);
-
-  blogTableInitialized = true;
-}
-
 /**
  * Returns the current KST date (YYYY-MM-DD).
  */
 export function getTodayKstDate(baseDate: Date = new Date()): string {
   const kstTime = new Date(baseDate.getTime() + 9 * 3600 * 1000);
-  const year = kstTime.getUTCFullYear();
-  const month = String(kstTime.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(kstTime.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-/**
- * Returns the target KST date (YYYY-MM-DD) for yesterday relative to execution time.
- */
-export function getYesterdayKstDate(baseDate: Date = new Date()): string {
-  const kstTime = new Date(baseDate.getTime() + 9 * 3600 * 1000 - 24 * 3600 * 1000);
   const year = kstTime.getUTCFullYear();
   const month = String(kstTime.getUTCMonth() + 1).padStart(2, "0");
   const day = String(kstTime.getUTCDate()).padStart(2, "0");
@@ -147,24 +105,6 @@ export function getSlotUtcBounds(
 
   const endEpoch = Date.UTC(y, m - 1, d, endHourKst, 0, 0) - 9 * 3600 * 1000;
   const startEpoch = endEpoch - lookbackHours * 3600 * 1000;
-
-  const toSqliteStr = (epoch: number) => {
-    return new Date(epoch).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
-  };
-
-  return {
-    startUtc: toSqliteStr(startEpoch),
-    endUtc: toSqliteStr(endEpoch),
-  };
-}
-
-/**
- * Legacy full-day bounds for backwards compatibility.
- */
-export function getKstDayUtcBounds(targetDateKst: string): { startUtc: string; endUtc: string } {
-  const [y, m, d] = targetDateKst.split("-").map(Number);
-  const startEpoch = Date.UTC(y, m - 1, d, 0, 0, 0) - 9 * 3600 * 1000;
-  const endEpoch = Date.UTC(y, m - 1, d, 23, 59, 59, 999) - 9 * 3600 * 1000;
 
   const toSqliteStr = (epoch: number) => {
     return new Date(epoch).toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
@@ -513,8 +453,6 @@ export async function publishDailyBlogPost(
   targetDateOverride?: string,
   slotOverride?: BlogSlot
 ): Promise<{ success: boolean; slug?: string; message: string }> {
-  await ensureBlogTable(env.DB);
-
   // Parse slot and date overrides if present
   let targetDate = targetDateOverride?.trim() || "";
   let slot: BlogSlot = slotOverride || getCurrentKstSlot();
